@@ -5,6 +5,11 @@ import numpy as np
 import io
 import warnings
 from datetime import datetime
+try:
+    from local_components import card_container
+except ImportError:
+    st.error("The 'local_components' module could not be found. Ensure 'local_components.py' exists in the same directory or adjust the import path.")
+    card_container = lambda title: st.container()  # Fallback to a basic container
 
 # Suppress warnings related to tight_layout
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
