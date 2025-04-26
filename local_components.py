@@ -1,15 +1,18 @@
 # local_components.py
-
 import streamlit as st
+from contextlib import contextmanager
 
-def card_container(title, body, color="lightblue"):
+@contextmanager
+def card_container(key=None):
     with st.container():
         st.markdown(
-            f"""
-            <div style="background-color:{color};padding:1rem;border-radius:10px;margin-bottom:1rem">
-                <h3 style="margin:0;">{title}</h3>
-                <p>{body}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
+            """
+            <div style="background-color:#f9f9f9;
+                        padding:1rem;
+                        border-radius:10px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                        margin-bottom: 1.5rem;">
+            """, unsafe_allow_html=True
         )
+        yield
+        st.markdown("</div>", unsafe_allow_html=True)
