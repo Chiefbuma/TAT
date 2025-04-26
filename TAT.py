@@ -81,65 +81,104 @@ def classify_shift(time):
         return 'Evening'
     return None
 
-# Main data processing function to load and process CSV data
+# Main data processing function (updated with departmental analysis)
 @st.cache_data  # Cache the data loading for performance
-def fetch_and_process_data(csv_path):
+def fetch_and_process_data(file_path):
     import os
     # Debugging: Check if file exists
-    if not os.path.exists(csv_path):
-        st.error(f"File does not exist at path: {csv_path}")
-        return None, None, None, None
+    if not os.path.exists(file_path):
+        st.error(f"File does not exist at path: {file_path}")
+        return None, None, None, None, None
 
     # Debugging: Check file size
-    file_size = os.path.getsize(csv_path)
+    file_size = os.path.getsize(file_path)
     if file_size == 0:
-        st.error(f"File at {csv_path} is empty.")
-        return None, None, None, None
+        st.error(f"File at {file_path} is empty.")
+        return None, None, None, None, None
 
+    # Read and parse the CSV file
     try:
-        TAT_df = pd.read_csv(csv_path, dtype={'UHID': str}, low_memory=False)
+        TAT_df = pd.read_csv(
+            file_path,
+            parse_dates=[
+                'ConsultationBillingTime',
+                'Pharmacy_Billing_Time',
+                'Pharmacy_Dispensing_Time',
+                'ConsultationStart_Date_Time',
+                'Visit_Signed_Time',
+                'Sample_Collection__Acknowledge_Date___Time',
+                'ID_Report_Save_Date_and_Time',
+                'Service_Bill_Date_Time',
+                'Procedure_Completion_Date_'
+            ],
+            dayfirst=True,
+            dtype={'UHID': str},  # Ensure UHID is treated as string
+            low_memory=False
+        )
         # Debugging: Check if DataFrame is empty
         if TAT_df.empty:
             st.error("CSV file loaded but contains no data.")
-            return None, None, None, None
+            return None, None, None, None, None
     except FileNotFoundError:
-        st.error(f"CSV file not found at {csv_path}. Please ensure the file exists.")
-        return None, None, None, None
+        st.error(f"CSV file not found at {file_path}. Please ensure the file exists.")
+        return None, None, None, None, None
     except Exception as e:
         st.error(f"Error reading the CSV file: {e}")
-        return None, None, None, None
+        return None, None, None, None, None
 
-    # Define datetime columns to parse
+    # Verify datetime parsing
+    st.write("### Debug: Datetime Columns Sample")
     datetime_columns = [
         'ConsultationBillingTime',
-        'Pharmacy_Billing_Time'
+        'Pharmacy_Billing_Time',
+        'Pharmacy_Dispensing_Time',
+        'ConsultationStart_Date_Time',
+        'Visit_Signed_Time',
+        'Sample_Collection__Acknowledge_Date___Time',
+        'ID_Report_Save_Date_and_Time',
+        'Service_Bill_Date_Time',
+        'Procedure_Completion_Date_'
     ]
-
-    # Convert datetime columns
     for col in datetime_columns:
         if col in TAT_df.columns:
-            TAT_df[col] = pd.to_datetime(TAT_df[col], dayfirst=True, errors='coerce')
+            st.write(f"**{col} dtype:**", str(TAT_df[col].dtype))
+            st.write(TAT_df[col].head())
+        else:
+            st.write(f"**{col}** not found in CSV.")
 
-    # Select required columns for TAT calculation
-    columns_to_import = [
+    # Select columns for Overall TAT calculation
+    overall_columns = [
         'UHID', 'PatientName', 'Department', 'FacilityName',
         'ConsultationBillingTime', 'Pharmacy_Billing_Time'
     ]
 
-    # Check for missing columns
+    # Select columns for Departmental TAT calculation
+    dept_columns = [
+        'Department', 'FacilityName',
+        'ConsultationStart_Date_Time', 'Visit_Signed_Time',
+        'Pharmacy_Billing_Time', 'Pharmacy_Dispensing_Time',
+        'Sample_Collection__Acknowledge_Date___Time', 'ID_Report_Save_Date_and_Time',
+        'Service_Bill_Date_Time', 'Procedure_Completion_Date_'
+    ]
+
+    # Combine all required columns
+    columns_to_import = list(set(overall_columns + dept_columns))
+    
+    # Ensure required columns exist
     missing_cols = [col for col in columns_to_import if col not in TAT_df.columns]
     if missing_cols:
         st.error(f"Missing required columns in CSV: {missing_cols}")
-        return None, None, None, None
+        return None, None, None, None, None
     
     # Keep only the required columns
     TAT_df = TAT_df[columns_to_import].copy()
 
     # Filter out invalid data
-    filtered_TAT_df = TAT_df.dropna(subset=['UHID'])
+    filtered_TAT_df = TAT_df.dropna(subset=['UHID'] if 'UHID' in TAT_df.columns else [])
     filtered_TAT_df = filtered_TAT_df[filtered_TAT_df['FacilityName'] != "Bliss Medical Centre HomeCare"]
 
-    # Split data by department
+    # --- Overall TAT Calculation ---
+    # Split data by department for overall TAT (Consultation to Pharmacy)
     Consultation_df = filtered_TAT_df[filtered_TAT_df['Department'] == 'GENERAL OPD'].drop(
         columns=['Pharmacy_Billing_Time'] if 'Pharmacy_Billing_Time' in filtered_TAT_df.columns else []).copy()
     Pharmacy_df = filtered_TAT_df[filtered_TAT_df['Department'] == 'Pharmacy'].drop(
@@ -174,101 +213,197 @@ def fetch_and_process_data(csv_path):
         how='left'
     )
 
-    # Calculate TAT for matched records
+    # Calculate Overall TAT for matched records
     filtered_merged_df = merged_df[merged_df['Pharmacy_Billing_Time'].notna()].copy()
     filtered_merged_df['TAT'] = (filtered_merged_df['Pharmacy_Billing_Time'] - 
                                  filtered_merged_df['ConsultationBillingTime']).dt.total_seconds() / 60
-    # Remove records with negative TAT by filtering
+    # Remove records with negative TAT
     filtered_merged_df = filtered_merged_df[filtered_merged_df['TAT'] >= 0].copy()
     filtered_merged_df['Time_out'] = filtered_merged_df['Pharmacy_Billing_Time']
-    filtered_merged_df['Department'] = 'TAT'
+    filtered_merged_df['Department'] = 'Overall TAT'
 
-    # No time filter needed since we want 24-hour data
-    filtered_period_df = filtered_merged_df.copy()
+    # Filter for 07:00–19:00 (consistent with previous version)
+    overall_df = filtered_merged_df[
+        (filtered_merged_df['Pharmacy_Billing_Time'].dt.time >= pd.to_datetime("07:00:00").time()) &
+        (filtered_merged_df['Pharmacy_Billing_Time'].dt.time <= pd.to_datetime("19:00:00").time())
+    ].copy()
 
-    if filtered_period_df.empty:
-        st.error("No data available after processing.")
-        return None, None, None, None
+    if overall_df.empty:
+        st.warning("No overall TAT data available after filtering for 07:00–19:00.")
 
-    # Calculate minutes since midnight for plotting (24-hour range)
-    filtered_period_df['Minutes_Since_Midnight'] = (
-        filtered_period_df['Time_out'].dt.hour * 60 +
-        filtered_period_df['Time_out'].dt.minute
+    # Calculate minutes since 07:00
+    overall_df['Minutes_Since_7AM'] = (
+        (overall_df['Pharmacy_Billing_Time'].dt.hour - 7) * 60 +
+        overall_df['Pharmacy_Billing_Time'].dt.minute
     )
 
     # Extract hour for hourly table
-    filtered_period_df['Hour'] = filtered_period_df['Time_out'].dt.hour
+    overall_df['Hour'] = overall_df['Pharmacy_Billing_Time'].dt.hour
 
     # Add shift and date components
-    filtered_period_df['Shift'] = filtered_period_df['Time_out'].apply(classify_shift)
-    filtered_period_df['Year'] = filtered_period_df['Time_out'].dt.year
-    filtered_period_df['Month'] = filtered_period_df['Time_out'].dt.month
-    filtered_period_df['Day'] = filtered_period_df['Time_out'].dt.day
-    filtered_period_df['Date'] = pd.to_datetime(filtered_period_df[['Year', 'Month', 'Day']])
-    
-    # Add Time column by extracting the time portion from Time_out
-    filtered_period_df['Time'] = filtered_period_df['Time_out'].dt.time
+    overall_df['Shift'] = overall_df['Pharmacy_Billing_Time'].apply(classify_shift)
+    overall_df['Year'] = overall_df['Pharmacy_Billing_Time'].dt.year
+    overall_df['Month'] = overall_df['Pharmacy_Billing_Time'].dt.month
+    overall_df['Day'] = overall_df['Pharmacy_Billing_Time'].dt.day
+    overall_df['Date'] = pd.to_datetime(overall_df[['Year', 'Month', 'Day']])
+    overall_df['Time'] = overall_df['Pharmacy_Billing_Time'].dt.time
 
-    # Additional DataFrames requested
+    # --- Departmental TAT Calculation ---
+    # Define the departments we want to keep
+    allowed_departments = ['DENTAL', 'Laboratory', 'Nursing', 'OPTICAL', 'Pharmacy', 'GENERAL OPD']
+
+    # Filter for allowed departments
+    dept_df = TAT_df[TAT_df['Department'].isin(allowed_departments)].copy()
+    dept_df = dept_df[dept_df['FacilityName'] != "Bliss Medical Centre HomeCare"]
+
+    # Rename columns for consistency
+    dept_df = dept_df.rename(columns={
+        'Procedure_Completion_Date_': 'Procedure_Completion_Date',
+        'Sample_Collection__Acknowledge_Date___Time': 'Sample_Collection_Acknowledge_Date_Time'
+    })
+
+    # Define department-specific time columns
+    dept_time_mapping = {
+        'DENTAL': {'Time_in': 'ConsultationStart_Date_Time', 'Time_out': 'Visit_Signed_Time'},
+        'Laboratory': {'Time_in': 'Sample_Collection_Acknowledge_Date_Time', 'Time_out': 'ID_Report_Save_Date_and_Time'},
+        'Nursing': {'Time_in': 'Service_Bill_Date_Time', 'Time_out': 'Procedure_Completion_Date'},
+        'OPTICAL': {'Time_in': 'ConsultationStart_Date_Time', 'Time_out': 'Visit_Signed_Time'},
+        'Pharmacy': {'Time_in': 'Pharmacy_Billing_Time', 'Time_out': 'Pharmacy_Dispensing_Time'},
+        'GENERAL OPD': {'Time_in': 'ConsultationStart_Date_Time', 'Time_out': 'Visit_Signed_Time'}
+    }
+
+    # Create department-specific DataFrames
+    dept_dfs = []
+    for dept, times in dept_time_mapping.items():
+        time_in_col = times['Time_in']
+        time_out_col = times['Time_out']
+        
+        # Check if the required time columns exist
+        if time_in_col not in dept_df.columns or time_out_col not in dept_df.columns:
+            st.warning(f"Skipping {dept}: Missing required time columns ({time_in_col}, {time_out_col})")
+            continue
+        
+        # Filter for the department
+        temp_df = dept_df[dept_df['Department'] == dept].copy()
+        
+        if temp_df.empty:
+            st.warning(f"No records for department: {dept}")
+            continue
+
+        # Keep only relevant columns for this department
+        keep_cols = ['Department', 'FacilityName', time_in_col, time_out_col]
+        temp_df = temp_df[keep_cols].copy()
+        temp_df = temp_df.rename(columns={
+            time_in_col: 'Time_in',
+            time_out_col: 'Time_out'
+        })
+
+        # Calculate TAT
+        temp_df = temp_df[temp_df['Time_in'].notna() & temp_df['Time_out'].notna()]
+        # Additional check for datetime type
+        if temp_df['Time_in'].dtype != 'datetime64[ns]' or temp_df['Time_out'].dtype != 'datetime64[ns]':
+            st.error(f"Error in {dept}: Time_in or Time_out is not datetime after conversion.")
+            st.write(f"Time_in dtype: {temp_df['Time_in'].dtype}")
+            st.write(f"Time_out dtype: {temp_df['Time_out'].dtype}")
+            st.write(f"Sample Time_in:\n{temp_df['Time_in'].head()}")
+            st.write(f"Sample Time_out:\n{temp_df['Time_out'].head()}")
+            continue
+
+        temp_df['TAT'] = (temp_df['Time_out'] - temp_df['Time_in']).dt.total_seconds() / 60
+        # Remove records with negative TAT
+        temp_df = temp_df[temp_df['TAT'] >= 0].copy()
+
+        # Add date column
+        temp_df['date'] = temp_df['Time_out'].dt.date
+
+        # Standardize columns
+        temp_df = temp_df[['date', 'FacilityName', 'Department', 'Time_in', 'Time_out', 'TAT']]
+
+        st.write(f"Records for {dept}: {len(temp_df)}")
+        dept_dfs.append(temp_df)
+
+    # Append all departmental DataFrames
+    if dept_dfs:
+        dept_final_df = pd.concat(dept_dfs, ignore_index=True)
+        st.write(f"Total departmental TAT records: {len(dept_final_df)}")
+
+        # Filter for 07:00–19:00
+        dept_final_df = dept_final_df[
+            (dept_final_df['Time_out'].dt.time >= pd.to_datetime("07:00:00").time()) &
+            (dept_final_df['Time_out'].dt.time <= pd.to_datetime("19:00:00").time())
+        ].copy()
+
+        # Calculate minutes since 07:00
+        dept_final_df['Minutes_Since_7AM'] = (
+            (dept_final_df['Time_out'].dt.hour - 7) * 60 +
+            dept_final_df['Time_out'].dt.minute
+        )
+
+        # Add shift and date components
+        dept_final_df['Shift'] = dept_final_df['Time_out'].apply(classify_shift)
+        dept_final_df['Year'] = dept_final_df['Time_out'].dt.year
+        dept_final_df['Month'] = dept_final_df['Time_out'].dt.month
+        dept_final_df['Day'] = dept_final_df['Time_out'].dt.day
+        dept_final_df['Date'] = pd.to_datetime(dept_final_df[['Year', 'Month', 'Day']])
+        dept_final_df['Time'] = dept_final_df['Time_out'].dt.time
+        dept_final_df['Hour'] = dept_final_df['Time_out'].dt.hour
+    else:
+        dept_final_df = pd.DataFrame()
+        st.warning("No departmental TAT data available.")
+
+    # Combine Overall and Departmental DataFrames
+    if not overall_df.empty and not dept_final_df.empty:
+        final_df = pd.concat([overall_df, dept_final_df], ignore_index=True)
+    elif not overall_df.empty:
+        final_df = overall_df
+    elif not dept_final_df.empty:
+        final_df = dept_final_df
+    else:
+        st.error("No data available after processing.")
+        return None, None, None, None, None
+
+    # Additional DataFrames (reintroduced for dashboard)
     # Create a new column 'time' to extract only the time part
     filtered_merged_df['time'] = filtered_merged_df['Pharmacy_Billing_Time'].dt.time
-
-    # Create a new column 'Shift' by applying the classify_shift function
     filtered_merged_df['Shift'] = filtered_merged_df['Pharmacy_Billing_Time'].apply(classify_shift)
 
-    # Group by 'date', 'FacilityName', and 'Shift'
+    # Group by 'date', 'FacilityName', and 'Shift' for Shift-Wise Average TAT
     grouped_df = filtered_merged_df.groupby(['date', 'FacilityName', 'Shift']).agg(
-        # Count of unique UHID
         Unique_UHID_Count=('UHID', 'nunique'),
-        Average_TAT=('TAT', 'mean')  # Average TAT
+        Average_TAT=('TAT', 'mean')
     ).reset_index()
 
-    # Group by 'date', 'PatientName', 'FacilityName', 'ConsultationBillingTime', 'Pharmacy_Billing_Time'
+    # Group by 'date', 'PatientName', 'FacilityName', 'ConsultationBillingTime', 'Pharmacy_Billing_Time' for Patient-Level
     patient_df = filtered_merged_df.groupby(['date', 'PatientName', 'FacilityName', 'ConsultationBillingTime', 'Pharmacy_Billing_Time']).agg(
-        Average_TAT=('TAT', 'mean')  # Average TAT
+        Average_TAT=('TAT', 'mean')
     ).reset_index()
-
-    # Add 20 minutes to Average TAT
     patient_df['Average_TAT'] += 20
 
-    # Group by 'date' and 'FacilityName'
+    # Group by 'date' and 'FacilityName' for Facility-Level
     grouped_All = filtered_merged_df.groupby(['date', 'FacilityName']).agg(
-        Average_TAT=('TAT', 'mean')  # Average TAT
+        Average_TAT=('TAT', 'mean')
     ).reset_index()
-
-    # Add 20 minutes to Average TAT
     grouped_All['Average_TAT'] += 20
 
-    # Pivot the DataFrame with FacilityName and date as index, and Shift as columns
+    # Pivot the DataFrame for Shift-Wise Average TAT
     pivoted_df = grouped_df.pivot_table(
-        index=['FacilityName', 'date'],  # Rows as medical centers and date
-        columns='Shift',                 # Columns as shifts
-        values='Average_TAT',            # Values as Average TAT
-        aggfunc='mean'                   # Average in case of multiple entries
+        index=['FacilityName', 'date'],
+        columns='Shift',
+        values='Average_TAT',
+        aggfunc='mean'
     )
-
-    # Calculate the daily average (across shift columns) and add it as a new column
     pivoted_df['Day Avg'] = pivoted_df.mean(axis=1)
-
-    # Convert TAT from minutes to "X hr Y min" format for each column, including 'Day Avg'
     pivoted_df = pivoted_df.applymap(
         lambda x: f"{int(x // 60)} hr {int(x % 60)} min" if pd.notnull(x) else "")
-
-    # Reset index to make 'FacilityName' and 'date' columns
     pivoted_df = pivoted_df.reset_index()
-
-    # Optional: Remove MultiIndex column names
     pivoted_df.columns.name = None
-
-    # Reorder columns based on preferred shift order, including 'Day Avg'
     preferred_order = ["FacilityName", "date", "Morning", "Mid Morning", "Afternoon", "Evening", "Night Shift", "Day Avg"]
-    # Retain only existing columns
     existing_columns = [col for col in preferred_order if col in pivoted_df.columns]
     pivoted_df = pivoted_df[existing_columns]
 
-    return filtered_period_df, patient_df, grouped_All, pivoted_df
+    return final_df, patient_df, grouped_All, pivoted_df, dept_final_df
 
-# Function to create a plot with TAT trend (no table subplot)
+# Function to create a plot with TAT trend (updated for 07:00–19:00)
 def plot_tat_trend(df, start_date, end_date, facility):
     # Filter data based on the date range
     filtered_df = df[
@@ -298,11 +433,18 @@ def plot_tat_trend(df, start_date, end_date, facility):
             st.error(f"No data available for facility: {facility} in the selected date range.")
             return None, None, None, None, None, None
 
+    # Filter for Overall TAT records (to maintain consistency with previous behavior)
+    filtered_df = filtered_df[filtered_df['Department'] == 'Overall TAT']
+
+    if filtered_df.empty:
+        st.error("No Overall TAT data available for the selected filters.")
+        return None, None, None, None, None, None
+
     # Prepare hourly stats to determine the x-axis range based on footfalls
     hourly_stats = filtered_df.groupby('Hour').agg({
         'TAT': 'mean',
         'Unique': 'nunique'
-    }).reindex(range(24), fill_value=0)
+    }).reindex(range(7, 20), fill_value=0)  # Only 07:00 to 19:00
 
     # Round average TAT to 0 decimal places
     hourly_stats['TAT'] = hourly_stats['TAT'].round(0)
@@ -313,29 +455,29 @@ def plot_tat_trend(df, start_date, end_date, facility):
         st.error("No footfalls recorded in the selected date range.")
         return None, None, None, None, None, None
 
-    start_hour = hours_with_footfalls.min()
-    end_hour = hours_with_footfalls.max()
-    start_minute = start_hour * 60  # Convert to minutes since midnight
-    end_minute = (end_hour + 1) * 60  # End of the last hour with footfalls
+    start_hour = max(hours_with_footfalls.min(), 7)  # Start at 07:00
+    end_hour = min(hours_with_footfalls.max(), 19)  # End at 19:00
+    start_minute = (start_hour - 7) * 60  # Convert to minutes since 07:00
+    end_minute = (end_hour - 7 + 1) * 60  # End of the last hour with footfalls
 
-    # Create figure for the plot (reduced height)
-    fig = plt.figure(figsize=(14, 4), facecolor='black')  # Reduced height from 6 to 4
-    ax1 = fig.add_subplot(111)  # Single subplot
+    # Create figure for the plot
+    fig = plt.figure(figsize=(14, 4), facecolor='black')
+    ax1 = fig.add_subplot(111)
     ax1.set_facecolor('black')
 
     # Plot TAT Trend (per minute)
-    minutes = filtered_df['Minutes_Since_Midnight']
+    minutes = filtered_df['Minutes_Since_7AM']
     tat = filtered_df['TAT']
 
-    # Create a minute range based on footfalls
-    all_minutes = np.arange(start_minute, end_minute)
+    # Create a minute range based on footfalls (07:00 to 19:00 = 720 minutes)
+    all_minutes = np.arange(0, 721)  # 0 to 720 minutes (07:00 to 19:00)
     tat_full = np.full_like(all_minutes, np.nan, dtype=float)
 
     # Group by minute and average TAT across all days (and facilities if "All Facilities")
-    minute_groups = filtered_df.groupby('Minutes_Since_Midnight')['TAT'].mean()
+    minute_groups = filtered_df.groupby('Minutes_Since_7AM')['TAT'].mean()
     for min_val, tat_val in minute_groups.items():
-        if start_minute <= min_val < end_minute:
-            tat_full[int(min_val - start_minute)] = tat_val
+        if 0 <= min_val < 721:
+            tat_full[int(min_val)] = tat_val
 
     # Interpolate to fill gaps (linear interpolation)
     tat_series = pd.Series(tat_full)
@@ -349,11 +491,11 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.tick_params(axis='y', labelcolor='cyan')
     ax1.tick_params(axis='x', labelcolor='white')
 
-    # Set x-axis with 1-hour intervals within the footfall range
+    # Set x-axis with 1-hour intervals (07:00 to 19:00)
     title = f'Overall TAT Trend - All Facilities - {start_date.date()} to {end_date.date()}' if facility == "All Facilities" else f'TAT Trend - {facility} - {start_date.date()} to {end_date.date()}'
     ax1.set_title(title, fontsize=14, color='white')
-    ax1.set_xticks(np.arange(start_minute, end_minute, 60))
-    ax1.set_xticklabels([f'{h:02d}:00' for h in range(start_hour, end_hour + 1)], rotation=45)
+    ax1.set_xticks(np.arange(0, 721, 60))
+    ax1.set_xticklabels([f'{h:02d}:00' for h in range(7, 20)], rotation=45)
     ax1.grid(True, alpha=0.3, color='gray')
 
     # Add legend
@@ -370,7 +512,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     plt.close()
 
     # Prepare hourly stats for Streamlit table (pivoted format)
-    hours = [f"{h:02d}:00" for h in range(24)]
+    hours = [f"{h:02d}:00" for h in range(7, 20)]
     tat_row = hourly_stats['TAT'].values
     footfall_row = hourly_stats['Unique'].values
     hourly_stats_df = pd.DataFrame({
@@ -387,9 +529,9 @@ def plot_tat_trend(df, start_date, end_date, facility):
     # Round average TAT to 0 decimal places for CSV export
     stats_df['TAT'] = stats_df['TAT'].round(0)
 
-    # Ensure all hours (0-23) are present for each facility
+    # Ensure all hours (7-19) are present for each facility
     facilities = filtered_df['FacilityName'].unique()
-    all_hours = range(24)
+    all_hours = range(7, 20)
     all_combinations = pd.MultiIndex.from_product([facilities, all_hours], names=['FacilityName', 'Hour'])
     all_combinations_df = pd.DataFrame(index=all_combinations).reset_index()
     
@@ -407,18 +549,73 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
+# Function to create a bar graph for departmental TAT comparison
+def plot_departmental_tat(df, start_date, end_date, facility):
+    # Filter data based on the date range
+    filtered_df = df[
+        (df['Date'] >= start_date) &
+        (df['Date'] <= end_date)
+    ]
+
+    if filtered_df.empty:
+        st.warning(f"No departmental data available for the selected date range: {start_date.date()} to {end_date.date()}.")
+        return None, None
+
+    # If a specific facility is selected (not "All Facilities"), filter by facility
+    if facility != "All Facilities":
+        filtered_df = filtered_df[filtered_df['FacilityName'] == facility]
+        if filtered_df.empty:
+            st.warning(f"No departmental data available for facility: {facility} in the selected date range.")
+            return None, None
+
+    # Group by department and calculate average TAT
+    dept_avg_tat = filtered_df.groupby('Department')['TAT'].mean().reset_index()
+    
+    if dept_avg_tat.empty:
+        st.warning("No departmental TAT data to plot.")
+        return None, None
+
+    # Create figure for the bar graph
+    fig = plt.figure(figsize=(10, 6), facecolor='black')
+    ax = fig.add_subplot(111)
+    ax.set_facecolor('black')
+
+    # Plot bar graph
+    bars = ax.bar(dept_avg_tat['Department'], dept_avg_tat['TAT'], color='cyan', edgecolor='white')
+
+    # Customize the plot
+    title = f'Departmental Average TAT - All Facilities - {start_date.date()} to {end_date.date()}' if facility == "All Facilities" else f'Departmental Average TAT - {facility} - {start_date.date()} to {end_date.date()}'
+    ax.set_title(title, fontsize=14, color='white')
+    ax.set_xlabel('Department', fontsize=12, color='white')
+    ax.set_ylabel('Average TAT (Minutes)', fontsize=12, color='cyan')
+    ax.tick_params(axis='x', labelcolor='white', rotation=45)
+    ax.tick_params(axis='y', labelcolor='cyan')
+    ax.grid(True, axis='y', alpha=0.3, color='gray')
+
+    # Adjust layout
+    plt.tight_layout()
+
+    # Save the plot to a bytes buffer
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', facecolor='black', bbox_inches='tight')
+    buf.seek(0)
+    plot_bytes = buf.getvalue()
+    plt.close()
+
+    return fig, plot_bytes
+
 # Streamlit app
-st.title(" Bliss Healthcare TAT Analysis Dashboard")
-st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends.")
+st.title("Bliss Healthcare TAT Analysis Dashboard")
+st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends between 07:00 and 19:00.")
 
 # Load the data
 csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
-filtered_period_df, patient_df, grouped_All, pivoted_df = fetch_and_process_data(csv_path)
+final_df, patient_df, grouped_All, pivoted_df, dept_final_df = fetch_and_process_data(csv_path)
 
-if filtered_period_df is not None:
+if final_df is not None:
     # Get the date range for the filters
-    earliest_date = filtered_period_df['Date'].min()
-    latest_date = filtered_period_df['Date'].max()
+    earliest_date = final_df['Date'].min()
+    latest_date = final_df['Date'].max()
 
     if earliest_date is None or latest_date is None:
         st.error("No valid dates available in the data.")
@@ -443,7 +640,7 @@ if filtered_period_df is not None:
                 format="YYYY-MM-DD"
             )
         with col3:
-            facility_options = ['All Facilities'] + sorted(filtered_period_df['FacilityName'].unique().tolist())
+            facility_options = ['All Facilities'] + sorted(final_df['FacilityName'].unique().tolist())
             facility = st.selectbox("Facility", options=facility_options, index=0)
 
         # Convert start_date and end_date to datetime for comparison
@@ -452,7 +649,7 @@ if filtered_period_df is not None:
 
         # Button to run the analysis
         if st.button("Run Analysis"):
-            with st.spinner("Generating chart..."):
+            with st.spinner("Generating charts..."):
                 # Apply date range filter to additional DataFrames
                 patient_df_filtered = patient_df[
                     (pd.to_datetime(patient_df['date']) >= start_date) &
@@ -474,17 +671,17 @@ if filtered_period_df is not None:
                     pivoted_df_filtered = pivoted_df_filtered[pivoted_df_filtered['FacilityName'] == facility]
 
                 # 1. Display TAT Trend (Graph)
-                result = plot_tat_trend(filtered_period_df, start_date, end_date, facility)
+                result = plot_tat_trend(final_df, start_date, end_date, facility)
                 if result[0] is not None:
                     fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
                     
                     with st.container():
-                        st.subheader("TAT Trend Chart")
+                        st.subheader("TAT Trend Chart (07:00–19:00)")
                         st.image(plot_bytes, use_container_width=True, output_format='PNG', caption='', clamp=True)
 
                     # 2. Display Hourly TAT and Footfall Table
                     with st.container():
-                        st.subheader("Hourly Statistics")
+                        st.subheader("Hourly Statistics (07:00–19:00)")
                         st.dataframe(
                             hourly_stats_df.set_index('Metric'),
                             use_container_width=True,
@@ -529,14 +726,23 @@ if filtered_period_df is not None:
                             st.write(grouped_All_display)
                             st.markdown('</div>', unsafe_allow_html=True)
 
-                    # 4. Display the Shift-Wise Average TAT (not specified in order, placed last)
+                    # 4. Display Departmental TAT Bar Graph
+                    if not dept_final_df.empty:
+                        dept_result = plot_departmental_tat(dept_final_df, start_date, end_date, facility)
+                        if dept_result[0] is not None:
+                            dept_fig, dept_plot_bytes = dept_result
+                            with st.container():
+                                st.subheader("Departmental Average TAT Comparison (07:00–19:00)")
+                                st.image(dept_plot_bytes, use_container_width=True, output_format='PNG', caption='', clamp=True)
+
+                    # 5. Display the Shift-Wise Average TAT
                     with st.container():
                         st.markdown('<div class="transparent-container">', unsafe_allow_html=True)
                         st.subheader("Shift-Wise Average TAT")
                         st.write(pivoted_df_filtered)
                         st.markdown('</div>', unsafe_allow_html=True)
 
-                    # Provide download links
+                    # 6. Provide download links
                     with st.container():
                         csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
                         csv_buffer = io.StringIO()
@@ -551,10 +757,19 @@ if filtered_period_df is not None:
 
                         plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
                         st.download_button(
-                            label="Download Plot (PNG)",
+                            label="Download Overall TAT Plot (PNG)",
                             data=plot_bytes,
                             file_name=plot_filename,
                             mime="image/png"
                         )
+
+                        if not dept_final_df.empty and dept_result[0] is not None:
+                            dept_plot_filename = 'dept_tat_all_facilities.png' if facility == "All Facilities" else 'dept_tat.png'
+                            st.download_button(
+                                label="Download Departmental TAT Plot (PNG)",
+                                data=dept_plot_bytes,
+                                file_name=dept_plot_filename,
+                                mime="image/png"
+                            )
 else:
     st.error("Failed to load data. Please check the CSV file path.")
