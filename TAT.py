@@ -7,8 +7,9 @@ import warnings
 from datetime import datetime
 from local_components import card_container  # Import the card_container component
 
-# Suppress warnings related to tight_layout
+# Suppress warnings related to tight_layout and deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
+warnings.filterwarnings('ignore', category=DeprecationWarning, message='.*use_column_width.*')
 
 # Set page config as the first Streamlit command
 st.set_page_config(page_title="TAT Analysis Dashboard", layout="wide")
@@ -271,7 +272,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.grid(True, alpha=0.3, color='gray')
 
     # Add legend
-   
+    ax1.legend(loc='upper left', labelcolor='white')
 
     # Adjust layout for the plot
     plt.tight_layout()
@@ -321,6 +322,9 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
+# Streamlit app
+st.title("TAT Analysis Dashboard")
+st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends.")
 
 # Load the data
 csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
@@ -370,7 +374,7 @@ if df is not None:
                     
                     # Chart Container: Display the chart in a card_container
                     with card_container(key="chart_card"):
-                        st.image(plot_bytes, use_column_width=True, output_format='PNG', caption='', clamp=True)
+                        st.image(plot_bytes, use_container_width=True, output_format='PNG', caption='', clamp=True)
 
                     # Table Container: Display the hourly stats in a card_container
                     with card_container(key="table_card"):
