@@ -326,94 +326,91 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
-# Streamlit app
-st.title("TAT Analysis Dashboard")
-st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends.")
+with card_container("Upload"):
+    # Load the data
+    csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
+    df = fetch_and_process_data(csv_path)
 
-# Load the data
-csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
-df = fetch_and_process_data(csv_path)
+    if df is not None:
+        # Get the date range for the filters
+        earliest_date = df['Date'].min()
+        latest_date = df['Date'].max()
 
-if df is not None:
-    # Get the date range for the filters
-    earliest_date = df['Date'].min()
-    latest_date = df['Date'].max()
+        if earliest_date is None or latest_date is None:
+            st.error("No valid dates available in the data.")
+        else:
+            # Create columns for the input widgets
+            col1, col2, col3 = st.columns([2, 2, 2])
 
-    if earliest_date is None or latest_date is None:
-        st.error("No valid dates available in the data.")
-    else:
-        # Create columns for the input widgets
-        col1, col2, col3 = st.columns([2, 2, 2])
+            with col1:
+                start_date = st.date_input(
+                    "Start Date",
+                    value=earliest_date,
+                    min_value=earliest_date,
+                    max_value=latest_date,
+                    format="YYYY-MM-DD"
+                )
+            with col2:
+                end_date = st.date_input(
+                    "End Date",
+                    value=latest_date,
+                    min_value=earliest_date,
+                    max_value=latest_date,
+                    format="YYYY-MM-DD"
+                )
+            with col3:
+                facility_options = ['All Facilities'] + sorted(df['FacilityName'].unique().tolist())
+                facility = st.selectbox("Facility", options=facility_options, index=0)
 
-        with col1:
-            start_date = st.date_input(
-                "Start Date",
-                value=earliest_date,
-                min_value=earliest_date,
-                max_value=latest_date,
-                format="YYYY-MM-DD"
-            )
-        with col2:
-            end_date = st.date_input(
-                "End Date",
-                value=latest_date,
-                min_value=earliest_date,
-                max_value=latest_date,
-                format="YYYY-MM-DD"
-            )
-        with col3:
-            facility_options = ['All Facilities'] + sorted(df['FacilityName'].unique().tolist())
-            facility = st.selectbox("Facility", options=facility_options, index=0)
+            # Convert start_date and end_date to datetime for comparison
+            start_date = pd.to_datetime(start_date)
+            end_date = pd.to_datetime(end_date)
 
-        # Convert start_date and end_date to datetime for comparison
-        start_date = pd.to_datetime(start_date)
-        end_date = pd.to_datetime(end_date)
+            # Button to run the analysis
+            if st.button("Run Analysis"):
+                with st.spinner("Generating chart..."):
+                    result = plot_tat_trend(df, start_date, end_date, facility)
+                    if result[0] is not None:
+                        fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
+                        
+                        # Chart Container: Display the chart as an image in a rounded container
+                        chart_container = st.container()
+                        with chart_container:
+                            st.image(plot_bytes, use_column_width=True, output_format='PNG', caption='', clamp=True)
 
-        # Button to run the analysis
-        if st.button("Run Analysis"):
-            with st.spinner("Generating chart..."):
-                result = plot_tat_trend(df, start_date, end_date, facility)
-                if result[0] is not None:
-                    fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
-                    
-                    # Chart Container: Display the chart as an image in a rounded container
-                    chart_container = st.container()
-                    with chart_container:
-                        st.image(plot_bytes, use_column_width=True, output_format='PNG', caption='', clamp=True)
+                        # Table Container: Display the hourly stats in a rounded container
+                        table_container = st.container()
+                        with table_container:
+                            st.subheader("Hourly Statistics")
+                            st.dataframe(
+                                hourly_stats_df.set_index('Metric'),
+                                use_container_width=True,
+                                column_config={
+                                    hour: st.column_config.NumberColumn(
+                                        hour,
+                                        format="%d"  # Display all numbers as integers (0 decimal places)
+                                    ) for hour in hourly_stats_df.columns if hour != 'Metric'
+                                }
+                            )
 
-                    # Table Container: Display the hourly stats in a rounded container
-                    table_container = st.container()
-                    with table_container:
-                        st.subheader("Hourly Statistics")
-                        st.dataframe(
-                            hourly_stats_df.set_index('Metric'),
-                            use_container_width=True,
-                            column_config={
-                                hour: st.column_config.NumberColumn(
-                                    hour,
-                                    format="%d"  # Display all numbers as integers (0 decimal places)
-                                ) for hour in hourly_stats_df.columns if hour != 'Metric'
-                            }
+                        # Provide download links
+                        csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
+                        csv_buffer = io.StringIO()
+                        csv_data.to_csv(csv_buffer, index=False)
+                        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+                        st.download_button(
+                            label="Download Table Data (CSV)",
+                            data=csv_bytes,
+                            file_name=csv_filename,
+                            mime="text/csv"
                         )
 
-                    # Provide download links
-                    csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
-                    csv_buffer = io.StringIO()
-                    csv_data.to_csv(csv_buffer, index=False)
-                    csv_bytes = csv_buffer.getvalue().encode('utf-8')
-                    st.download_button(
-                        label="Download Table Data (CSV)",
-                        data=csv_bytes,
-                        file_name=csv_filename,
-                        mime="text/csv"
-                    )
-
-                    plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
-                    st.download_button(
-                        label="Download Plot (PNG)",
-                        data=plot_bytes,
-                        file_name=plot_filename,
-                        mime="image/png"
-                    )
-else:
-    st.error("Failed to load data. Please check the CSV file path.")
+                        plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
+                        st.download_button(
+                            label="Download Plot (PNG)",
+                            data=plot_bytes,
+                            file_name=plot_filename,
+                            mime="image/png"
+                        )
+    else:
+        st.error("Failed to load data. Please check the CSV file path.")
