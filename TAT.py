@@ -10,7 +10,7 @@ from datetime import datetime
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
 
 # Set page config as the first Streamlit command
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="TAT Analysis Dashboard", layout="wide")
 
 # Apply CSS styling
 st.markdown("""
@@ -202,14 +202,14 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     if filtered_df.empty:
         st.error("No data available even with fallback filters.")
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     # If a specific facility is selected (not "All Facilities"), filter by facility
     if facility != "All Facilities":
         filtered_df = filtered_df[filtered_df['FacilityName'] == facility]
         if filtered_df.empty:
             st.error(f"No data available for facility: {facility} in the selected date range.")
-            return None, None, None, None, None
+            return None, None, None, None, None, None
 
     # Create figure for the plot (no table subplot)
     fig = plt.figure(figsize=(14, 6), facecolor='black')  # Adjusted height since no table
@@ -251,7 +251,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     # Add legend
     ax1.legend(loc='upper left', labelcolor='white')
 
-    # Prepare hourly stats for Streamlit table
+    # Prepare hourly stats for Streamlit table (pivoted format)
     hourly_stats = filtered_df.groupby('Hour').agg({
         'TAT': 'mean',
         'Unique': 'nunique'
@@ -259,9 +259,15 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     # Round average TAT to 2 decimal places
     hourly_stats['TAT'] = hourly_stats['TAT'].round(2)
-    hourly_stats.reset_index(inplace=True)
-    hourly_stats.rename(columns={'TAT': 'Avg TAT (min)', 'Unique': 'Footfalls'}, inplace=True)
-    hourly_stats['Hour'] = hourly_stats['Hour'].apply(lambda x: f"{x:02d}:00")
+
+    # Create a DataFrame with hours as columns, TAT and Footfalls as rows
+    hours = [f"{h:02d}:00" for h in range(24)]
+    tat_row = hourly_stats['TAT'].values
+    footfall_row = hourly_stats['Unique'].values
+    hourly_stats_df = pd.DataFrame({
+        'Metric': ['Avg TAT (min)', 'Footfalls'],
+        **{hour: [tat_row[i], footfall_row[i]] for i, hour in enumerate(hours)}
+    })
 
     # Prepare CSV export data (same as before)
     stats_df = filtered_df.groupby(['FacilityName', 'Hour']).agg({
@@ -300,9 +306,10 @@ def plot_tat_trend(df, start_date, end_date, facility):
     plot_bytes = buf.getvalue()
     buf.close()
 
-    return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats
+    return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
-
+# Streamlit app
+st.title("TAT Analysis Dashboard")
 st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends.")
 
 # Load the data
@@ -349,7 +356,7 @@ if df is not None:
             with st.spinner("Generating chart..."):
                 result = plot_tat_trend(df, start_date, end_date, facility)
                 if result[0] is not None:
-                    fig, csv_data, plot_bytes, start_date, end_date, hourly_stats = result
+                    fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
                     # Display the plot
                     st.pyplot(fig)
                     plt.close()
@@ -357,12 +364,13 @@ if df is not None:
                     # Display the hourly stats as a Streamlit table
                     st.subheader("Hourly Statistics")
                     st.dataframe(
-                        hourly_stats,
+                        hourly_stats_df.set_index('Metric'),
                         use_container_width=True,
                         column_config={
-                            "Hour": st.column_config.TextColumn("Hour"),
-                            "Avg TAT (min)": st.column_config.NumberColumn("Avg TAT (min)", format="%.2f"),
-                            "Footfalls": st.column_config.NumberColumn("Footfalls", format="%d")
+                            hour: st.column_config.NumberColumn(
+                                hour,
+                                format="%.2f" if hour in hourly_stats_df.columns and hourly_stats_df.iloc[0][hour] != hourly_stats_df.iloc[1][hour] else "%d"
+                            ) for hour in hourly_stats_df.columns if hour != 'Metric'
                         }
                     )
 
