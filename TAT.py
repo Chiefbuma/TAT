@@ -5,7 +5,7 @@ import numpy as np
 import io
 import warnings
 from datetime import datetime
-from local_components import card_container  # Import the card_container component
+
 
 # Suppress warnings related to tight_layout and deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
