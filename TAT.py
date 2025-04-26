@@ -256,7 +256,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     tat_interpolated = tat_series.interpolate(method='linear')
 
     # Plot TAT
-    label = 'Overall TAT (All Facilities)' if facility == "All Facilities" else f'{facility} TAT'
+    
     ax1.plot(all_minutes, tat_interpolated, linewidth=2, label=label, color='cyan')
     ax1.set_xlabel('Time of Day', fontsize=12, color='white')
     ax1.set_ylabel('Average TAT (Minutes)', fontsize=12, color='cyan')
