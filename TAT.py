@@ -271,7 +271,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.grid(True, alpha=0.3, color='gray')
 
     # Add legend
-    ax1.legend(loc='upper left', labelcolor='black')
+   
 
     # Adjust layout for the plot
     plt.tight_layout()
