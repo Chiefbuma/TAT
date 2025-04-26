@@ -271,8 +271,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.set_xticklabels([f'{h:02d}:00' for h in range(start_hour, end_hour + 1)], rotation=45)
     ax1.grid(True, alpha=0.3, color='gray')
 
-    # Add legend
-    ax1.legend(loc='upper left', labelcolor='white')
+  
 
     # Adjust layout for the plot
     plt.tight_layout()
