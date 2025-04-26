@@ -48,6 +48,12 @@ st.markdown("""
             background-color: #333333;
             color: white;
         }
+        .rounded-container {
+            background-color: #333333;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -211,8 +217,28 @@ def plot_tat_trend(df, start_date, end_date, facility):
             st.error(f"No data available for facility: {facility} in the selected date range.")
             return None, None, None, None, None, None
 
-    # Create figure for the plot (no table subplot)
-    fig = plt.figure(figsize=(14, 6), facecolor='black')  # Adjusted height since no table
+    # Prepare hourly stats to determine the x-axis range based on footfalls
+    hourly_stats = filtered_df.groupby('Hour').agg({
+        'TAT': 'mean',
+        'Unique': 'nunique'
+    }).reindex(range(24), fill_value=0)
+
+    # Round average TAT to 2 decimal places
+    hourly_stats['TAT'] = hourly_stats['TAT'].round(2)
+
+    # Determine the x-axis range based on hours with footfalls
+    hours_with_footfalls = hourly_stats[hourly_stats['Unique'] > 0].index
+    if len(hours_with_footfalls) == 0:
+        st.error("No footfalls recorded in the selected date range.")
+        return None, None, None, None, None, None
+
+    start_hour = hours_with_footfalls.min()
+    end_hour = hours_with_footfalls.max()
+    start_minute = start_hour * 60  # Convert to minutes since midnight
+    end_minute = (end_hour + 1) * 60  # End of the last hour with footfalls
+
+    # Create figure for the plot (reduced height)
+    fig = plt.figure(figsize=(14, 4), facecolor='black')  # Reduced height from 6 to 4
     ax1 = fig.add_subplot(111)  # Single subplot
     ax1.set_facecolor('black')
 
@@ -220,14 +246,15 @@ def plot_tat_trend(df, start_date, end_date, facility):
     minutes = filtered_df['Minutes_Since_Midnight']
     tat = filtered_df['TAT']
 
-    # Create a full minute range (00:00 to 23:59 = 1440 minutes)
-    all_minutes = np.arange(0, 1440)
+    # Create a minute range based on footfalls
+    all_minutes = np.arange(start_minute, end_minute)
     tat_full = np.full_like(all_minutes, np.nan, dtype=float)
 
     # Group by minute and average TAT across all days (and facilities if "All Facilities")
     minute_groups = filtered_df.groupby('Minutes_Since_Midnight')['TAT'].mean()
     for min_val, tat_val in minute_groups.items():
-        tat_full[int(min_val)] = tat_val
+        if start_minute <= min_val < end_minute:
+            tat_full[int(min_val - start_minute)] = tat_val
 
     # Interpolate to fill gaps (linear interpolation)
     tat_series = pd.Series(tat_full)
@@ -241,26 +268,17 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.tick_params(axis='y', labelcolor='cyan')
     ax1.tick_params(axis='x', labelcolor='white')
 
-    # Set x-axis with 1-hour intervals (00:00 to 23:00)
-    title = f'Overall TAT Trend (24 Hours) - All Facilities - {start_date.date()} to {end_date.date()}' if facility == "All Facilities" else f'TAT Trend (24 Hours) - {facility} - {start_date.date()} to {end_date.date()}'
+    # Set x-axis with 1-hour intervals within the footfall range
+    title = f'Overall TAT Trend - All Facilities - {start_date.date()} to {end_date.date()}' if facility == "All Facilities" else f'TAT Trend - {facility} - {start_date.date()} to {end_date.date()}'
     ax1.set_title(title, fontsize=14, color='white')
-    ax1.set_xticks(np.arange(0, 1440, 60))
-    ax1.set_xticklabels([f'{h:02d}:00' for h in range(0, 24)], rotation=45)
+    ax1.set_xticks(np.arange(start_minute, end_minute, 60))
+    ax1.set_xticklabels([f'{h:02d}:00' for h in range(start_hour, end_hour + 1)], rotation=45)
     ax1.grid(True, alpha=0.3, color='gray')
 
     # Add legend
     ax1.legend(loc='upper left', labelcolor='white')
 
     # Prepare hourly stats for Streamlit table (pivoted format)
-    hourly_stats = filtered_df.groupby('Hour').agg({
-        'TAT': 'mean',
-        'Unique': 'nunique'
-    }).reindex(range(24), fill_value=0)
-
-    # Round average TAT to 2 decimal places
-    hourly_stats['TAT'] = hourly_stats['TAT'].round(2)
-
-    # Create a DataFrame with hours as columns, TAT and Footfalls as rows
     hours = [f"{h:02d}:00" for h in range(24)]
     tat_row = hourly_stats['TAT'].values
     footfall_row = hourly_stats['Unique'].values
@@ -357,22 +375,29 @@ if df is not None:
                 result = plot_tat_trend(df, start_date, end_date, facility)
                 if result[0] is not None:
                     fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
-                    # Display the plot
-                    st.pyplot(fig)
+                    
+                    # Display the plot in a rounded container
+                    with st.container():
+                        st.markdown('<div class="rounded-container">', unsafe_allow_html=True)
+                        st.pyplot(fig)
+                        st.markdown('</div>', unsafe_allow_html=True)
                     plt.close()
 
-                    # Display the hourly stats as a Streamlit table
-                    st.subheader("Hourly Statistics")
-                    st.dataframe(
-                        hourly_stats_df.set_index('Metric'),
-                        use_container_width=True,
-                        column_config={
-                            hour: st.column_config.NumberColumn(
-                                hour,
-                                format="%.2f" if hour in hourly_stats_df.columns and hourly_stats_df.iloc[0][hour] != hourly_stats_df.iloc[1][hour] else "%d"
-                            ) for hour in hourly_stats_df.columns if hour != 'Metric'
-                        }
-                    )
+                    # Display the hourly stats in a rounded container
+                    with st.container():
+                        st.markdown('<div class="rounded-container">', unsafe_allow_html=True)
+                        st.subheader("Hourly Statistics")
+                        st.dataframe(
+                            hourly_stats_df.set_index('Metric'),
+                            use_container_width=True,
+                            column_config={
+                                hour: st.column_config.NumberColumn(
+                                    hour,
+                                    format="%.2f" if hour in hourly_stats_df.columns and hourly_stats_df.iloc[0][hour] != hourly_stats_df.iloc[1][hour] else "%d"
+                                ) for hour in hourly_stats_df.columns if hour != 'Metric'
+                            }
+                        )
+                        st.markdown('</div>', unsafe_allow_html=True)
 
                     # Provide download links
                     csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
