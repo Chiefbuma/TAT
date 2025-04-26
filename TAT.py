@@ -321,9 +321,6 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
-# Streamlit app
-st.title("TAT Analysis Dashboard")
-st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends.")
 
 # Load the data
 csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
