@@ -5,7 +5,6 @@ import numpy as np
 import io
 import warnings
 from datetime import datetime
-from local_components import card_container  # Import the card_container component
 
 # Suppress warnings related to tight_layout and deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
@@ -14,7 +13,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning, message='.*use_co
 # Set page config as the first Streamlit command
 st.set_page_config(page_title="TAT Analysis Dashboard", layout="wide")
 
-# Apply CSS styling
+# Apply CSS styling with rounded borders and transparent containers
 st.markdown("""
     <style>
         body {
@@ -50,6 +49,19 @@ st.markdown("""
             background-color: #333333;
             color: white;
         }
+        /* Apply rounded borders to st.container */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border: 1px solid white !important;
+            border-radius: 15px !important;
+            padding: 10px;
+            background-color: #1a1a1a;
+        }
+        /* Transparent containers for specific sections */
+        .transparent-container div[data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: rgba(255, 255, 255, 0.1) !important; /* Semi-transparent white */
+            border: 1px solid white !important;
+            border-radius: 15px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -72,8 +84,24 @@ def classify_shift(time):
 # Main data processing function to load and process CSV data
 @st.cache_data  # Cache the data loading for performance
 def fetch_and_process_data(csv_path):
+    import os
+    # Debugging: Check if file exists
+    if not os.path.exists(csv_path):
+        st.error(f"File does not exist at path: {csv_path}")
+        return None, None, None, None
+
+    # Debugging: Check file size
+    file_size = os.path.getsize(csv_path)
+    if file_size == 0:
+        st.error(f"File at {csv_path} is empty.")
+        return None, None, None, None
+
     try:
         TAT_df = pd.read_csv(csv_path, dtype={'UHID': str}, low_memory=False)
+        # Debugging: Check if DataFrame is empty
+        if TAT_df.empty:
+            st.error("CSV file loaded but contains no data.")
+            return None, None, None, None
     except FileNotFoundError:
         st.error(f"CSV file not found at {csv_path}. Please ensure the file exists.")
         return None, None, None, None
@@ -445,51 +473,17 @@ if filtered_period_df is not None:
                     grouped_All_filtered = grouped_All_filtered[grouped_All_filtered['FacilityName'] == facility]
                     pivoted_df_filtered = pivoted_df_filtered[pivoted_df_filtered['FacilityName'] == facility]
 
-                # Display additional DataFrames in columns
-                cols = st.columns([2, 1])
-                with cols[0]:
-                    # Select box for TAT filter
-                    tat_filter = st.selectbox("Select TAT Filter", ["All", "TAT above 1 hour (60)"])
-
-                    # Apply filter based on the selected option
-                    if tat_filter == "TAT above 1 hour (60)":
-                        filtered_df = patient_df_filtered[patient_df_filtered['Average_TAT'] > 59]
-                    else:
-                        filtered_df = patient_df_filtered
-
-                    # Display the filtered DataFrame
-                    with card_container(key="patient_df_card"):
-                        st.subheader("Patient-Level TAT Data")
-                        st.write(filtered_df)
-
-                with cols[1]:
-                    tat_filter_2 = st.selectbox("Select", ["All", "TAT above 1 hour (60)"])
-                    if tat_filter_2 == "TAT above 1 hour (60)":
-                        grouped_All_display = grouped_All_filtered[grouped_All_filtered['Average_TAT'] > 59]
-                    else:
-                        grouped_All_display = grouped_All_filtered
-
-                    # Display the grouped DataFrame
-                    with card_container(key="grouped_all_card"):
-                        st.subheader("Facility-Level TAT Data")
-                        st.write(grouped_All_display)
-
-                # Display the pivoted DataFrame
-                with card_container(key="pivoted_df_card"):
-                    st.subheader("Shift-Wise Average TAT")
-                    st.write(pivoted_df_filtered)
-
-                # Existing chart and table display
+                # 1. Display TAT Trend (Graph)
                 result = plot_tat_trend(filtered_period_df, start_date, end_date, facility)
                 if result[0] is not None:
                     fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
                     
-                    # Chart Container: Display the chart in a card_container
-                    with card_container(key="chart_card"):
+                    with st.container():
+                        st.subheader("TAT Trend Chart")
                         st.image(plot_bytes, use_container_width=True, output_format='PNG', caption='', clamp=True)
 
-                    # Table Container: Display the hourly stats in a card_container
-                    with card_container(key="table_card"):
+                    # 2. Display Hourly TAT and Footfall Table
+                    with st.container():
                         st.subheader("Hourly Statistics")
                         st.dataframe(
                             hourly_stats_df.set_index('Metric'),
@@ -502,24 +496,65 @@ if filtered_period_df is not None:
                             }
                         )
 
-                    # Provide download links
-                    csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
-                    csv_buffer = io.StringIO()
-                    csv_data.to_csv(csv_buffer, index=False)
-                    csv_bytes = csv_buffer.getvalue().encode('utf-8')
-                    st.download_button(
-                        label="Download Table Data (CSV)",
-                        data=csv_bytes,
-                        file_name=csv_filename,
-                        mime="text/csv"
-                    )
+                    # 3. Display Patient-Level and Facility-Level Data Side by Side
+                    cols = st.columns([2, 1])
+                    with cols[0]:
+                        # Select box for TAT filter
+                        tat_filter = st.selectbox("Select TAT Filter", ["All", "TAT above 1 hour (60)"])
 
-                    plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
-                    st.download_button(
-                        label="Download Plot (PNG)",
-                        data=plot_bytes,
-                        file_name=plot_filename,
-                        mime="image/png"
-                    )
+                        # Apply filter based on the selected option
+                        if tat_filter == "TAT above 1 hour (60)":
+                            filtered_df = patient_df_filtered[patient_df_filtered['Average_TAT'] > 59]
+                        else:
+                            filtered_df = patient_df_filtered
+
+                        # Display the filtered DataFrame in a transparent container
+                        with st.container():
+                            st.markdown('<div class="transparent-container">', unsafe_allow_html=True)
+                            st.subheader("Patient-Level TAT Data")
+                            st.write(filtered_df)
+                            st.markdown('</div>', unsafe_allow_html=True)
+
+                    with cols[1]:
+                        tat_filter_2 = st.selectbox("Select", ["All", "TAT above 1 hour (60)"])
+                        if tat_filter_2 == "TAT above 1 hour (60)":
+                            grouped_All_display = grouped_All_filtered[grouped_All_filtered['Average_TAT'] > 59]
+                        else:
+                            grouped_All_display = grouped_All_filtered
+
+                        # Display the grouped DataFrame in a transparent container
+                        with st.container():
+                            st.markdown('<div class="transparent-container">', unsafe_allow_html=True)
+                            st.subheader("Facility-Level TAT Data")
+                            st.write(grouped_All_display)
+                            st.markdown('</div>', unsafe_allow_html=True)
+
+                    # 4. Display the Shift-Wise Average TAT (not specified in order, placed last)
+                    with st.container():
+                        st.markdown('<div class="transparent-container">', unsafe_allow_html=True)
+                        st.subheader("Shift-Wise Average TAT")
+                        st.write(pivoted_df_filtered)
+                        st.markdown('</div>', unsafe_allow_html=True)
+
+                    # Provide download links
+                    with st.container():
+                        csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
+                        csv_buffer = io.StringIO()
+                        csv_data.to_csv(csv_buffer, index=False)
+                        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+                        st.download_button(
+                            label="Download Table Data (CSV)",
+                            data=csv_bytes,
+                            file_name=csv_filename,
+                            mime="text/csv"
+                        )
+
+                        plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
+                        st.download_button(
+                            label="Download Plot (PNG)",
+                            data=plot_bytes,
+                            file_name=plot_filename,
+                            mime="image/png"
+                        )
 else:
     st.error("Failed to load data. Please check the CSV file path.")
