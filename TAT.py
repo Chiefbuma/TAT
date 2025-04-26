@@ -5,8 +5,6 @@ import numpy as np
 import io
 import warnings
 from datetime import datetime
-from local_components import card_container
-
 
 # Suppress warnings related to tight_layout
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
@@ -328,10 +326,15 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
+# Streamlit app
+st.title("TAT Analysis Dashboard")
+st.markdown("Select the date range and facility to analyze the Turnaround Time (TAT) trends.")
+
+# Load the data
+csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
+df = fetch_and_process_data(csv_path)
+
 with card_container("Upload"):
-    # Load the data
-    csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
-    df = fetch_and_process_data(csv_path)
 
     if df is not None:
         # Get the date range for the filters
