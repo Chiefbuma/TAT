@@ -203,14 +203,14 @@ def plot_tat_trend(df, start_year, start_month, start_day, end_year, end_month, 
 
     if filtered_df.empty:
         st.error("No data available even with fallback filters.")
-        return None, None, None
+        return None, None, None, None, None
 
     # If a specific facility is selected (not "All Facilities"), filter by facility
     if facility != "All Facilities":
         filtered_df = filtered_df[filtered_df['FacilityName'] == facility]
         if filtered_df.empty:
             st.error(f"No data available for facility: {facility} in the selected date range.")
-            return None, None, None
+            return None, None, None, None, None
 
     # Create figure with two subplots: one for the graph, one for the table
     fig = plt.figure(figsize=(14, 8), facecolor='black')
@@ -331,7 +331,7 @@ def plot_tat_trend(df, start_year, start_month, start_day, end_year, end_month, 
     plot_bytes = buf.getvalue()
     buf.close()
 
-    return fig, csv_data, plot_bytes
+    return fig, csv_data, plot_bytes, start_date, end_date
 
 # Streamlit app
 st.title("TAT Analysis Dashboard")
@@ -374,8 +374,9 @@ if df is not None:
 
         # Button to run the analysis
         if st.button("Run Analysis"):
-            fig, csv_data, plot_bytes = plot_tat_trend(df, start_year, start_month, start_day, end_year, end_month, end_day, facility)
-            if fig is not None:
+            result = plot_tat_trend(df, start_year, start_month, start_day, end_year, end_month, end_day, facility)
+            if result[0] is not None:
+                fig, csv_data, plot_bytes, start_date, end_date = result
                 # Display the plot
                 st.pyplot(fig)
                 plt.close()
