@@ -5,7 +5,7 @@ import numpy as np
 import io
 import warnings
 from datetime import datetime
-
+from local_components import card_container  # Import the card_container component
 
 # Suppress warnings related to tight_layout and deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
@@ -271,7 +271,8 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.set_xticklabels([f'{h:02d}:00' for h in range(start_hour, end_hour + 1)], rotation=45)
     ax1.grid(True, alpha=0.3, color='gray')
 
-  
+    # Add legend
+    ax1.legend(loc='upper left', labelcolor='white')
 
     # Adjust layout for the plot
     plt.tight_layout()
