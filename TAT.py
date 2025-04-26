@@ -10,7 +10,7 @@ from datetime import datetime
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
 
 # Set page config as the first Streamlit command
-st.set_page_config(page_title="TAT Analysis Dashboard", layout="wide")
+st.set_page_config(layout="wide")
 
 # Apply CSS styling
 st.markdown("""
