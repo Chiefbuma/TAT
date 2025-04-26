@@ -76,10 +76,10 @@ def fetch_and_process_data(csv_path):
         TAT_df = pd.read_csv(csv_path, dtype={'UHID': str}, low_memory=False)
     except FileNotFoundError:
         st.error(f"CSV file not found at {csv_path}. Please ensure the file exists.")
-        return None
+        return None, None, None, None
     except Exception as e:
         st.error(f"Error reading the CSV file: {e}")
-        return None
+        return None, None, None, None
 
     # Define datetime columns to parse
     datetime_columns = [
@@ -102,7 +102,7 @@ def fetch_and_process_data(csv_path):
     missing_cols = [col for col in columns_to_import if col not in TAT_df.columns]
     if missing_cols:
         st.error(f"Missing required columns in CSV: {missing_cols}")
-        return None
+        return None, None, None, None
     
     # Keep only the required columns
     TAT_df = TAT_df[columns_to_import].copy()
@@ -160,7 +160,7 @@ def fetch_and_process_data(csv_path):
 
     if filtered_period_df.empty:
         st.error("No data available after processing.")
-        return None
+        return None, None, None, None
 
     # Calculate minutes since midnight for plotting (24-hour range)
     filtered_period_df['Minutes_Since_Midnight'] = (
@@ -181,7 +181,64 @@ def fetch_and_process_data(csv_path):
     # Add Time column by extracting the time portion from Time_out
     filtered_period_df['Time'] = filtered_period_df['Time_out'].dt.time
 
-    return filtered_period_df
+    # Additional DataFrames requested
+    # Create a new column 'time' to extract only the time part
+    filtered_merged_df['time'] = filtered_merged_df['Pharmacy_Billing_Time'].dt.time
+
+    # Create a new column 'Shift' by applying the classify_shift function
+    filtered_merged_df['Shift'] = filtered_merged_df['Pharmacy_Billing_Time'].apply(classify_shift)
+
+    # Group by 'date', 'FacilityName', and 'Shift'
+    grouped_df = filtered_merged_df.groupby(['date', 'FacilityName', 'Shift']).agg(
+        # Count of unique UHID
+        Unique_UHID_Count=('UHID', 'nunique'),
+        Average_TAT=('TAT', 'mean')  # Average TAT
+    ).reset_index()
+
+    # Group by 'date', 'PatientName', 'FacilityName', 'ConsultationBillingTime', 'Pharmacy_Billing_Time'
+    patient_df = filtered_merged_df.groupby(['date', 'PatientName', 'FacilityName', 'ConsultationBillingTime', 'Pharmacy_Billing_Time']).agg(
+        Average_TAT=('TAT', 'mean')  # Average TAT
+    ).reset_index()
+
+    # Add 20 minutes to Average TAT
+    patient_df['Average_TAT'] += 20
+
+    # Group by 'date' and 'FacilityName'
+    grouped_All = filtered_merged_df.groupby(['date', 'FacilityName']).agg(
+        Average_TAT=('TAT', 'mean')  # Average TAT
+    ).reset_index()
+
+    # Add 20 minutes to Average TAT
+    grouped_All['Average_TAT'] += 20
+
+    # Pivot the DataFrame with FacilityName and date as index, and Shift as columns
+    pivoted_df = grouped_df.pivot_table(
+        index=['FacilityName', 'date'],  # Rows as medical centers and date
+        columns='Shift',                 # Columns as shifts
+        values='Average_TAT',            # Values as Average TAT
+        aggfunc='mean'                   # Average in case of multiple entries
+    )
+
+    # Calculate the daily average (across shift columns) and add it as a new column
+    pivoted_df['Day Avg'] = pivoted_df.mean(axis=1)
+
+    # Convert TAT from minutes to "X hr Y min" format for each column, including 'Day Avg'
+    pivoted_df = pivoted_df.applymap(
+        lambda x: f"{int(x // 60)} hr {int(x % 60)} min" if pd.notnull(x) else "")
+
+    # Reset index to make 'FacilityName' and 'date' columns
+    pivoted_df = pivoted_df.reset_index()
+
+    # Optional: Remove MultiIndex column names
+    pivoted_df.columns.name = None
+
+    # Reorder columns based on preferred shift order, including 'Day Avg'
+    preferred_order = ["FacilityName", "date", "Morning", "Mid Morning", "Afternoon", "Evening", "Night Shift", "Day Avg"]
+    # Retain only existing columns
+    existing_columns = [col for col in preferred_order if col in pivoted_df.columns]
+    pivoted_df = pivoted_df[existing_columns]
+
+    return filtered_period_df, patient_df, grouped_All, pivoted_df
 
 # Function to create a plot with TAT trend (no table subplot)
 def plot_tat_trend(df, start_date, end_date, facility):
@@ -271,7 +328,8 @@ def plot_tat_trend(df, start_date, end_date, facility):
     ax1.set_xticklabels([f'{h:02d}:00' for h in range(start_hour, end_hour + 1)], rotation=45)
     ax1.grid(True, alpha=0.3, color='gray')
 
-  
+    # Add legend
+    ax1.legend(loc='upper left', labelcolor='white')
 
     # Adjust layout for the plot
     plt.tight_layout()
@@ -327,12 +385,12 @@ st.markdown("Select the date range and facility to analyze the Turnaround Time (
 
 # Load the data
 csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setup
-df = fetch_and_process_data(csv_path)
+filtered_period_df, patient_df, grouped_All, pivoted_df = fetch_and_process_data(csv_path)
 
-if df is not None:
+if filtered_period_df is not None:
     # Get the date range for the filters
-    earliest_date = df['Date'].min()
-    latest_date = df['Date'].max()
+    earliest_date = filtered_period_df['Date'].min()
+    latest_date = filtered_period_df['Date'].max()
 
     if earliest_date is None or latest_date is None:
         st.error("No valid dates available in the data.")
@@ -357,7 +415,7 @@ if df is not None:
                 format="YYYY-MM-DD"
             )
         with col3:
-            facility_options = ['All Facilities'] + sorted(df['FacilityName'].unique().tolist())
+            facility_options = ['All Facilities'] + sorted(filtered_period_df['FacilityName'].unique().tolist())
             facility = st.selectbox("Facility", options=facility_options, index=0)
 
         # Convert start_date and end_date to datetime for comparison
@@ -367,7 +425,62 @@ if df is not None:
         # Button to run the analysis
         if st.button("Run Analysis"):
             with st.spinner("Generating chart..."):
-                result = plot_tat_trend(df, start_date, end_date, facility)
+                # Apply date range filter to additional DataFrames
+                patient_df_filtered = patient_df[
+                    (pd.to_datetime(patient_df['date']) >= start_date) &
+                    (pd.to_datetime(patient_df['date']) <= end_date)
+                ]
+                grouped_All_filtered = grouped_All[
+                    (pd.to_datetime(grouped_All['date']) >= start_date) &
+                    (pd.to_datetime(grouped_All['date']) <= end_date)
+                ]
+                pivoted_df_filtered = pivoted_df[
+                    (pd.to_datetime(pivoted_df['date']) >= start_date) &
+                    (pd.to_datetime(pivoted_df['date']) <= end_date)
+                ]
+
+                # Apply facility filter to additional DataFrames
+                if facility != "All Facilities":
+                    patient_df_filtered = patient_df_filtered[patient_df_filtered['FacilityName'] == facility]
+                    grouped_All_filtered = grouped_All_filtered[grouped_All_filtered['FacilityName'] == facility]
+                    pivoted_df_filtered = pivoted_df_filtered[pivoted_df_filtered['FacilityName'] == facility]
+
+                # Display additional DataFrames in columns
+                cols = st.columns([2, 1])
+                with cols[0]:
+                    # Select box for TAT filter
+                    tat_filter = st.selectbox("Select TAT Filter", ["All", "TAT above 1 hour (60)"])
+
+                    # Apply filter based on the selected option
+                    if tat_filter == "TAT above 1 hour (60)":
+                        filtered_df = patient_df_filtered[patient_df_filtered['Average_TAT'] > 59]
+                    else:
+                        filtered_df = patient_df_filtered
+
+                    # Display the filtered DataFrame
+                    with card_container(key="patient_df_card"):
+                        st.subheader("Patient-Level TAT Data")
+                        st.write(filtered_df)
+
+                with cols[1]:
+                    tat_filter_2 = st.selectbox("Select", ["All", "TAT above 1 hour (60)"])
+                    if tat_filter_2 == "TAT above 1 hour (60)":
+                        grouped_All_display = grouped_All_filtered[grouped_All_filtered['Average_TAT'] > 59]
+                    else:
+                        grouped_All_display = grouped_All_filtered
+
+                    # Display the grouped DataFrame
+                    with card_container(key="grouped_all_card"):
+                        st.subheader("Facility-Level TAT Data")
+                        st.write(grouped_All_display)
+
+                # Display the pivoted DataFrame
+                with card_container(key="pivoted_df_card"):
+                    st.subheader("Shift-Wise Average TAT")
+                    st.write(pivoted_df_filtered)
+
+                # Existing chart and table display
+                result = plot_tat_trend(filtered_period_df, start_date, end_date, facility)
                 if result[0] is not None:
                     fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
                     
