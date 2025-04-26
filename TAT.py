@@ -48,11 +48,15 @@ st.markdown("""
             background-color: #333333;
             color: white;
         }
-        .rounded-container {
+        .stContainer > div {
             background-color: #333333;
             border-radius: 15px;
             padding: 15px;
             margin-bottom: 20px;
+        }
+        .stPlotlyChart, .stPlotlyChart > div {
+            background-color: #333333 !important;
+            border-radius: 15px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -223,8 +227,8 @@ def plot_tat_trend(df, start_date, end_date, facility):
         'Unique': 'nunique'
     }).reindex(range(24), fill_value=0)
 
-    # Round average TAT to 2 decimal places
-    hourly_stats['TAT'] = hourly_stats['TAT'].round(2)
+    # Round average TAT to 0 decimal places
+    hourly_stats['TAT'] = hourly_stats['TAT'].round(0)
 
     # Determine the x-axis range based on hours with footfalls
     hours_with_footfalls = hourly_stats[hourly_stats['Unique'] > 0].index
@@ -293,8 +297,8 @@ def plot_tat_trend(df, start_date, end_date, facility):
         'Unique': 'nunique'
     }).reset_index()
 
-    # Round average TAT to 2 decimal places
-    stats_df['TAT'] = stats_df['TAT'].round(2)
+    # Round average TAT to 0 decimal places for CSV export
+    stats_df['TAT'] = stats_df['TAT'].round(0)
 
     # Ensure all hours (0-23) are present for each facility
     facilities = filtered_df['FacilityName'].unique()
@@ -378,14 +382,11 @@ if df is not None:
                     
                     # Display the plot in a rounded container
                     with st.container():
-                        st.markdown('<div class="rounded-container">', unsafe_allow_html=True)
                         st.pyplot(fig)
-                        st.markdown('</div>', unsafe_allow_html=True)
                     plt.close()
 
                     # Display the hourly stats in a rounded container
                     with st.container():
-                        st.markdown('<div class="rounded-container">', unsafe_allow_html=True)
                         st.subheader("Hourly Statistics")
                         st.dataframe(
                             hourly_stats_df.set_index('Metric'),
@@ -393,11 +394,10 @@ if df is not None:
                             column_config={
                                 hour: st.column_config.NumberColumn(
                                     hour,
-                                    format="%.2f" if hour in hourly_stats_df.columns and hourly_stats_df.iloc[0][hour] != hourly_stats_df.iloc[1][hour] else "%d"
+                                    format="%d"  # Display all numbers as integers (0 decimal places)
                                 ) for hour in hourly_stats_df.columns if hour != 'Metric'
                             }
                         )
-                        st.markdown('</div>', unsafe_allow_html=True)
 
                     # Provide download links
                     csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
