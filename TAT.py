@@ -4,13 +4,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import io
 import warnings
-from datetime import datetime
 
 # Suppress warnings related to tight_layout
 warnings.filterwarnings('ignore', category=UserWarning, message='.*tight_layout.*')
 
 # Set page config as the first Streamlit command
-st.set_page_config( layout="wide")
+st.set_page_config(page_title="TAT Analysis Dashboard", layout="wide")
 
 # Apply CSS styling
 st.markdown("""
@@ -28,19 +27,13 @@ st.markdown("""
             color: white !important;
             border: 1px solid white !important;
         }
-        .stDateInput, .stDateInput div, .stDateInput label, .stDateInput input {
-            background-color: #000000 !important;
-            color: white !important;
-            border: 1px solid white !important;
-        }
         .stButton button {
             background-color: #333333;
             color: white;
             border: 1px solid white;
         }
-        .stDataFrame {
+        .stTable {
             color: white;
-            background-color: #333333;
         }
         table, th, td {
             border: 1px solid white;
@@ -181,8 +174,16 @@ def fetch_and_process_data(csv_path):
 
     return filtered_period_df
 
-# Function to create a plot with TAT trend (no table subplot)
-def plot_tat_trend(df, start_date, end_date, facility):
+# Function to create a plot with TAT trend and a table below it
+def plot_tat_trend(df, start_year, start_month, start_day, end_year, end_month, end_day, facility):
+    # Construct start and end dates
+    start_date = pd.to_datetime(f"{start_year}-{start_month}-{start_day}")
+    end_date = pd.to_datetime(f"{end_year}-{end_month}-{end_day}")
+
+    # Ensure start_date <= end_date
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+
     # Filter data based on the date range
     filtered_df = df[
         (df['Date'] >= start_date) &
@@ -211,12 +212,15 @@ def plot_tat_trend(df, start_date, end_date, facility):
             st.error(f"No data available for facility: {facility} in the selected date range.")
             return None, None, None, None, None
 
-    # Create figure for the plot (no table subplot)
-    fig = plt.figure(figsize=(14, 6), facecolor='black')  # Adjusted height since no table
-    ax1 = fig.add_subplot(111)  # Single subplot
+    # Create figure with two subplots: one for the graph, one for the table
+    fig = plt.figure(figsize=(14, 8), facecolor='black')
+    gs = fig.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.4)
+
+    # --- Plot the TAT Trend (Top Subplot) ---
+    ax1 = fig.add_subplot(gs[0, 0])
     ax1.set_facecolor('black')
 
-    # Plot TAT Trend (per minute)
+    # Plot TAT Trend (per minute, left y-axis)
     minutes = filtered_df['Minutes_Since_Midnight']
     tat = filtered_df['TAT']
 
@@ -233,7 +237,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     tat_series = pd.Series(tat_full)
     tat_interpolated = tat_series.interpolate(method='linear')
 
-    # Plot TAT
+    # Plot TAT on the left y-axis
     label = 'Overall TAT (All Facilities)' if facility == "All Facilities" else f'{facility} TAT'
     ax1.plot(all_minutes, tat_interpolated, linewidth=2, label=label, color='cyan')
     ax1.set_xlabel('Time of Day', fontsize=12, color='white')
@@ -251,7 +255,11 @@ def plot_tat_trend(df, start_date, end_date, facility):
     # Add legend
     ax1.legend(loc='upper left', labelcolor='white')
 
-    # Prepare hourly stats for Streamlit table
+    # --- Create the Hourly Table (Bottom Subplot) ---
+    ax_table = fig.add_subplot(gs[1, 0])
+    ax_table.set_facecolor('black')
+
+    # Group by hour to calculate average TAT and count of unique records (footfalls)
     hourly_stats = filtered_df.groupby('Hour').agg({
         'TAT': 'mean',
         'Unique': 'nunique'
@@ -259,11 +267,34 @@ def plot_tat_trend(df, start_date, end_date, facility):
 
     # Round average TAT to 2 decimal places
     hourly_stats['TAT'] = hourly_stats['TAT'].round(2)
-    hourly_stats.reset_index(inplace=True)
-    hourly_stats.rename(columns={'TAT': 'Avg TAT (min)', 'Unique': 'Footfalls'}, inplace=True)
-    hourly_stats['Hour'] = hourly_stats['Hour'].apply(lambda x: f"{x:02d}:00")
 
-    # Prepare CSV export data (same as before)
+    # Prepare table data
+    table_data = [
+        hourly_stats['TAT'].values,
+        hourly_stats['Unique'].values
+    ]
+    row_labels = ['Avg TAT (min)', 'Footfalls']
+    col_labels = [f'{h}' for h in range(24)]
+
+    # Create the table with white text for visibility
+    table = ax_table.table(cellText=table_data,
+                           rowLabels=row_labels,
+                           colLabels=col_labels,
+                           cellLoc='center',
+                           loc='center',
+                           cellColours=[[('#333333' if val != 0 else 'black') for val in row] for row in table_data],
+                           colColours=['#333333' for _ in range(24)],
+                           rowColours=['#333333', '#333333'])
+    
+    # Style the table
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    for key, cell in table.get_celld().items():
+        cell.set_text_props(color='white')
+    table.scale(1, 1.5)
+    ax_table.axis('off')
+
+    # Prepare CSV export data
     stats_df = filtered_df.groupby(['FacilityName', 'Hour']).agg({
         'TAT': 'mean',
         'Unique': 'nunique'
@@ -290,8 +321,8 @@ def plot_tat_trend(df, start_date, end_date, facility):
     csv_data = stats_df[['FacilityName', 'Hours', 'TAT', 'Unique']].copy()
     csv_data.rename(columns={'Unique': 'Footfalls'}, inplace=True)
 
-    # Adjust layout for the single plot
-    plt.tight_layout()
+    # Adjust layout manually to prevent overlap
+    plt.subplots_adjust(top=0.85, bottom=0.15, hspace=0.4)
 
     # Save the plot to a bytes buffer for download
     buf = io.BytesIO()
@@ -300,7 +331,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
     plot_bytes = buf.getvalue()
     buf.close()
 
-    return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats
+    return fig, csv_data, plot_bytes, start_date, end_date
 
 # Streamlit app
 st.title("TAT Analysis Dashboard")
@@ -311,80 +342,63 @@ csv_path = "data/ConsolidatedTATReportNew.csv"  # Adjust this path for your setu
 df = fetch_and_process_data(csv_path)
 
 if df is not None:
-    # Get the date range for the filters
-    earliest_date = df['Date'].min()
-    latest_date = df['Date'].max()
-
-    if earliest_date is None or latest_date is None:
-        st.error("No valid dates available in the data.")
+    # Get unique values for filters
+    years = sorted(df['Year'].dropna().unique().astype(int))
+    if not years:
+        st.error("No valid years available in the data.")
     else:
         # Create columns for the input widgets
-        col1, col2, col3 = st.columns([2, 2, 2])
+        col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
 
         with col1:
-            start_date = st.date_input(
-                "Start Date",
-                value=earliest_date,
-                min_value=earliest_date,
-                max_value=latest_date,
-                format="YYYY-MM-DD"
-            )
+            start_year = st.selectbox("Start Year", options=years, index=0)
         with col2:
-            end_date = st.date_input(
-                "End Date",
-                value=latest_date,
-                min_value=earliest_date,
-                max_value=latest_date,
-                format="YYYY-MM-DD"
-            )
+            start_months = sorted(df[df['Year'] == start_year]['Month'].dropna().unique().astype(int))
+            start_month = st.selectbox("Start Month", options=start_months, index=0)
         with col3:
+            start_days = sorted(df[(df['Year'] == start_year) & (df['Month'] == start_month)]['Day'].dropna().unique().astype(int))
+            start_day = st.selectbox("Start Day", options=start_days, index=0)
+
+        with col4:
+            end_year = st.selectbox("End Year", options=years, index=len(years)-1)
+        with col5:
+            end_months = sorted(df[df['Year'] == end_year]['Month'].dropna().unique().astype(int))
+            end_month = st.selectbox("End Month", options=end_months, index=len(end_months)-1)
+        with col6:
+            end_days = sorted(df[(df['Year'] == end_year) & (df['Month'] == end_month)]['Day'].dropna().unique().astype(int))
+            end_day = st.selectbox("End Day", options=end_days, index=len(end_days)-1)
+
+        with col7:
             facility_options = ['All Facilities'] + sorted(df['FacilityName'].unique().tolist())
             facility = st.selectbox("Facility", options=facility_options, index=0)
 
-        # Convert start_date and end_date to datetime for comparison
-        start_date = pd.to_datetime(start_date)
-        end_date = pd.to_datetime(end_date)
-
         # Button to run the analysis
         if st.button("Run Analysis"):
-            with st.spinner("Generating chart..."):
-                result = plot_tat_trend(df, start_date, end_date, facility)
-                if result[0] is not None:
-                    fig, csv_data, plot_bytes, start_date, end_date, hourly_stats = result
-                    # Display the plot
-                    st.pyplot(fig)
-                    plt.close()
+            result = plot_tat_trend(df, start_year, start_month, start_day, end_year, end_month, end_day, facility)
+            if result[0] is not None:
+                fig, csv_data, plot_bytes, start_date, end_date = result
+                # Display the plot
+                st.pyplot(fig)
+                plt.close()
 
-                    # Display the hourly stats as a Streamlit table
-                    st.subheader("Hourly Statistics")
-                    st.dataframe(
-                        hourly_stats,
-                        use_container_width=True,
-                        column_config={
-                            "Hour": st.column_config.TextColumn("Hour"),
-                            "Avg TAT (min)": st.column_config.NumberColumn("Avg TAT (min)", format="%.2f"),
-                            "Footfalls": st.column_config.NumberColumn("Footfalls", format="%d")
-                        }
-                    )
+                # Provide download links
+                csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
+                csv_buffer = io.StringIO()
+                csv_data.to_csv(csv_buffer, index=False)
+                csv_bytes = csv_buffer.getvalue().encode('utf-8')
+                st.download_button(
+                    label="Download Table Data (CSV)",
+                    data=csv_bytes,
+                    file_name=csv_filename,
+                    mime="text/csv"
+                )
 
-                    # Provide download links
-                    csv_filename = f"tat_stats_{start_date.date()}_to_{end_date.date()}.csv"
-                    csv_buffer = io.StringIO()
-                    csv_data.to_csv(csv_buffer, index=False)
-                    csv_bytes = csv_buffer.getvalue().encode('utf-8')
-                    st.download_button(
-                        label="Download Table Data (CSV)",
-                        data=csv_bytes,
-                        file_name=csv_filename,
-                        mime="text/csv"
-                    )
-
-                    plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
-                    st.download_button(
-                        label="Download Plot (PNG)",
-                        data=plot_bytes,
-                        file_name=plot_filename,
-                        mime="image/png"
-                    )
+                plot_filename = 'tat_trend_all_facilities.png' if facility == "All Facilities" else 'tat_trend.png'
+                st.download_button(
+                    label="Download Plot (PNG)",
+                    data=plot_bytes,
+                    file_name=plot_filename,
+                    mime="image/png"
+                )
 else:
     st.error("Failed to load data. Please check the CSV file path.")
