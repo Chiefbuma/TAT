@@ -54,10 +54,6 @@ st.markdown("""
             padding: 15px;
             margin-bottom: 20px;
         }
-        .stPlotlyChart, .stPlotlyChart > div {
-            background-color: #333333 !important;
-            border-radius: 15px;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -282,6 +278,16 @@ def plot_tat_trend(df, start_date, end_date, facility):
     # Add legend
     ax1.legend(loc='upper left', labelcolor='white')
 
+    # Adjust layout for the plot
+    plt.tight_layout()
+
+    # Save the plot to a bytes buffer for display and download
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', facecolor='black')
+    buf.seek(0)
+    plot_bytes = buf.getvalue()
+    plt.close()
+
     # Prepare hourly stats for Streamlit table (pivoted format)
     hours = [f"{h:02d}:00" for h in range(24)]
     tat_row = hourly_stats['TAT'].values
@@ -291,7 +297,7 @@ def plot_tat_trend(df, start_date, end_date, facility):
         **{hour: [tat_row[i], footfall_row[i]] for i, hour in enumerate(hours)}
     })
 
-    # Prepare CSV export data (same as before)
+    # Prepare CSV export data
     stats_df = filtered_df.groupby(['FacilityName', 'Hour']).agg({
         'TAT': 'mean',
         'Unique': 'nunique'
@@ -317,16 +323,6 @@ def plot_tat_trend(df, start_date, end_date, facility):
     # Prepare CSV data
     csv_data = stats_df[['FacilityName', 'Hours', 'TAT', 'Unique']].copy()
     csv_data.rename(columns={'Unique': 'Footfalls'}, inplace=True)
-
-    # Adjust layout for the single plot
-    plt.tight_layout()
-
-    # Save the plot to a bytes buffer for download
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', facecolor='black')
-    buf.seek(0)
-    plot_bytes = buf.getvalue()
-    buf.close()
 
     return fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df
 
@@ -380,13 +376,14 @@ if df is not None:
                 if result[0] is not None:
                     fig, csv_data, plot_bytes, start_date, end_date, hourly_stats_df = result
                     
-                    # Display the plot in a rounded container
-                    with st.container():
-                        st.pyplot(fig)
-                    plt.close()
+                    # Chart Container: Display the chart as an image in a rounded container
+                    chart_container = st.container()
+                    with chart_container:
+                        st.image(plot_bytes, use_column_width=True, output_format='PNG', caption='', clamp=True)
 
-                    # Display the hourly stats in a rounded container
-                    with st.container():
+                    # Table Container: Display the hourly stats in a rounded container
+                    table_container = st.container()
+                    with table_container:
                         st.subheader("Hourly Statistics")
                         st.dataframe(
                             hourly_stats_df.set_index('Metric'),
