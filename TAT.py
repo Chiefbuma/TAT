@@ -293,9 +293,6 @@ def fetch_and_process_data(file_input):
         # Filter for the department
         temp_df = dept_df[dept_df['Department'] == dept].copy()
         
-        if temp_df.empty:
-            st.warning(f"No records for department: {dept}")
-            continue
 
         # Keep only relevant columns for this department
         keep_cols = ['Department', 'FacilityName', time_in_col, time_out_col]
