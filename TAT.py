@@ -150,8 +150,7 @@ def fetch_and_process_data(file_input):
         if col in TAT_df.columns:
             st.write(f"**{col} dtype:**", str(TAT_df[col].dtype))
             st.write(TAT_df[col].head())
-        else:
-            st.write(f"**{col}** not found in CSV.")
+
 
     # Select columns for Overall TAT calculation
     overall_columns = [
