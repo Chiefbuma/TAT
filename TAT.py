@@ -133,8 +133,7 @@ def fetch_and_process_data(file_input):
         st.error(f"Error reading the CSV file: {e}")
         return None, None, None, None, None
 
-    # Verify datetime parsing
-    st.write("### Debug: Datetime Columns Sample")
+ 
     datetime_columns = [
         'ConsultationBillingTime',
         'Pharmacy_Billing_Time',
@@ -146,12 +145,7 @@ def fetch_and_process_data(file_input):
         'Service_Bill_Date_Time',
         'Procedure_Completion_Date_'
     ]
-    for col in datetime_columns:
-        if col in TAT_df.columns:
-            st.write(f"**{col} dtype:**", str(TAT_df[col].dtype))
-            st.write(TAT_df[col].head())
-        else:
-            st.write(f"**{col}** not found in CSV.")
+  
 
     # Select columns for Overall TAT calculation
     overall_columns = [
