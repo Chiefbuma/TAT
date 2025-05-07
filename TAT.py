@@ -307,14 +307,7 @@ def fetch_and_process_data(file_input):
 
         # Calculate TAT
         temp_df = temp_df[temp_df['Time_in'].notna() & temp_df['Time_out'].notna()]
-        # Additional check for datetime type
-        if temp_df['Time_in'].dtype != 'datetime64[ns]' or temp_df['Time_out'].dtype != 'datetime64[ns]':
-            st.error(f"Error in {dept}: Time_in or Time_out is not datetime after conversion.")
-            st.write(f"Time_in dtype: {temp_df['Time_in'].dtype}")
-            st.write(f"Time_out dtype: {temp_df['Time_out'].dtype}")
-            st.write(f"Sample Time_in:\n{temp_df['Time_in'].head()}")
-            st.write(f"Sample Time_out:\n{temp_df['Time_out'].head()}")
-            continue
+
 
         temp_df['TAT'] = (temp_df['Time_out'] - temp_df['Time_in']).dt.total_seconds() / 60
         # Remove records with negative TAT
