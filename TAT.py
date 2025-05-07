@@ -134,7 +134,7 @@ def fetch_and_process_data(file_input):
         return None, None, None, None, None
 
     # Verify datetime parsing
-
+    st.write("### Debug: Datetime Columns Sample")
     datetime_columns = [
         'ConsultationBillingTime',
         'Pharmacy_Billing_Time',
@@ -146,7 +146,12 @@ def fetch_and_process_data(file_input):
         'Service_Bill_Date_Time',
         'Procedure_Completion_Date_'
     ]
-
+    for col in datetime_columns:
+        if col in TAT_df.columns:
+            st.write(f"**{col} dtype:**", str(TAT_df[col].dtype))
+            st.write(TAT_df[col].head())
+        else:
+            st.write(f"**{col}** not found in CSV.")
 
     # Select columns for Overall TAT calculation
     overall_columns = [
@@ -280,7 +285,10 @@ def fetch_and_process_data(file_input):
         time_in_col = times['Time_in']
         time_out_col = times['Time_out']
         
-
+        # Check if the required time columns exist
+        if time_in_col not in dept_df.columns or time_out_col not in dept_df.columns:
+            st.warning(f"Skipping {dept}: Missing required time columns ({time_in_col}, {time_out_col})")
+            continue
         
         # Filter for the department
         temp_df = dept_df[dept_df['Department'] == dept].copy()
@@ -318,7 +326,7 @@ def fetch_and_process_data(file_input):
         # Standardize columns
         temp_df = temp_df[['date', 'FacilityName', 'Department', 'Time_in', 'Time_out', 'TAT']]
 
-    
+        st.write(f"Records for {dept}: {len(temp_df)}")
         dept_dfs.append(temp_df)
 
     # Append all departmental DataFrames
