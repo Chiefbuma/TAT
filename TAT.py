@@ -326,13 +326,13 @@ def fetch_and_process_data(file_input):
         # Standardize columns
         temp_df = temp_df[['date', 'FacilityName', 'Department', 'Time_in', 'Time_out', 'TAT']]
 
-        st.write(f"Records for {dept}: {len(temp_df)}")
+
         dept_dfs.append(temp_df)
 
     # Append all departmental DataFrames
     if dept_dfs:
         dept_final_df = pd.concat(dept_dfs, ignore_index=True)
-        st.write(f"Total departmental TAT records: {len(dept_final_df)}")
+       
 
         # Filter for 07:00–19:00
         dept_final_df = dept_final_df[
