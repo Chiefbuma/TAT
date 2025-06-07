@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import mysql.connector
 from mysql.connector import Error
-import uuid
 
 # Set page config for wide layout
 st.set_page_config(page_title="Patient Distribution Dashboard", layout="wide")
@@ -192,7 +191,7 @@ def fetch_patient_data():
                     st.error(f"DOB-based Age Category query failed: {e}")
                     age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
             else:
-                age_df = pd.DataFrame({'age_category': ['No Data'], ' CST', 'count': [0]})
+                age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
                 st.warning("DOB column not found in patient table.")
 
         conn.close()
@@ -249,9 +248,7 @@ def create_donut_chart(labels, values, title, total):
 
 # Function to create bar chart
 def create_bar_chart(labels, values, title, total):
-    percentages = [(value / total * 100) if total > 0 else 0 for
-
- value in values]
+    percentages = [(value / total * 100) if total > 0 else 0 for value in values]
     text_labels = [f"{value}<br>{percent:.1f}%" for value, percent in zip(values, percentages)]
     
     fig = go.Figure(data=[
