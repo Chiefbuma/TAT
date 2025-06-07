@@ -298,7 +298,7 @@ def create_table_data(df, label_column, total):
     return pd.DataFrame(table_data)
 
 # Main app
-st.title("Patient Distribution Dashboard")
+
 
 # Fetch data
 data = fetch_patient_data()
@@ -313,7 +313,7 @@ col1, col2 = st.columns(2)
 # Column 1 - Total Patients
 with col1:
     
-    st.subheader("Total Patients")
+
     series = [total_patients] if total_patients > 0 else [0]
     labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
     fig = create_donut_chart(labels, series, "Total Patients", total_patients)
@@ -336,7 +336,7 @@ with col1:
 # Column 1 - Patients by Gender
 with col1:
    
-    st.subheader("Patients by Gender")
+
     df_table = create_table_data(gender_df, 'gender', total_patients)
     fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
     st.plotly_chart(fig, use_container_width=True)
@@ -356,7 +356,7 @@ with col1:
 # Column 2 - Patients by Status
 with col2:
   
-    st.subheader("Patients by Status")
+
     df_table = create_table_data(status_df, 'patient_status', total_patients)
     fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
     st.plotly_chart(fig, use_container_width=True)
@@ -375,8 +375,7 @@ with col2:
 
 # Column 2 - Patients by Age Category
 with col2:
-   
-    st.subheader("Patients by Age Category")
+
     df_table = create_table_data(age_df, 'age_category', total_patients)
     fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
     st.plotly_chart(fig, use_container_width=True)
