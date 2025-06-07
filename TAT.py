@@ -3,11 +3,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import mysql.connector
 from mysql.connector import Error
+import uuid
 
 # Set page config for wide layout
 st.set_page_config(page_title="Patient Distribution Dashboard", layout="wide")
 
-# Custom CSS for the desired color scheme (white background, black chart containers)
+# Custom CSS for styling
 st.markdown("""
     <style>
         /* Main white background */
@@ -15,11 +16,15 @@ st.markdown("""
             background-color: white !important;
         }
         
-        /* Black containers for charts/tables */
-        .stPlotlyChart, .stDataFrame, .stDataFrame table {
+        /* Container styling */
+        .custom-container {
             background-color: black !important;
             border-radius: 10px;
             padding: 15px;
+            height: 450px; /* Fixed height for all containers */
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
         }
         
         /* Table styling */
@@ -27,6 +32,7 @@ st.markdown("""
             background-color: black !important;
             color: white !important;
             border: 1px solid #444 !important;
+            width: 100%;
         }
         
         th, td {
@@ -67,15 +73,14 @@ def column_exists(cursor, table_name, column_name):
         return False
 
 # Function to fetch patient data from MySQL
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def fetch_patient_data():
     try:
         conn = mysql.connector.connect(
-           host="35.209.69.119",  # Replace with your MySQL host
-            user="u0iky3cyvfnfy",        # Replace with your MySQL user
-            password="Thisisme@2026",# Replace with your MySQL password
-            database="db4idjmbjsqwkf" # Replace with your database name
-
+            host="35.209.69.119",
+            user="u0iky3cyvfnfy",
+            password="Thisisme@2026",
+            database="db4idjmbjsqwkf"
         )
         cursor = conn.cursor()
 
@@ -187,7 +192,7 @@ def fetch_patient_data():
                     st.error(f"DOB-based Age Category query failed: {e}")
                     age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
             else:
-                age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
+                age_df = pd.DataFrame({'age_category': ['No Data'], ' CST', 'count': [0]})
                 st.warning("DOB column not found in patient table.")
 
         conn.close()
@@ -206,28 +211,32 @@ def fetch_patient_data():
             'age': pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
         }
 
-# Function to create donut chart with black background
-def create_donut_chart(labels, values, title):
+# Function to create donut chart
+def create_donut_chart(labels, values, title, total):
+    percentages = [(value / total * 100) if total > 0 else 0 for value in values]
+    text_labels = [f"{label}<br>{value}<br>{percent:.1f}%" for label, value, percent in zip(labels, values, percentages)]
+    
     fig = go.Figure(data=[
         go.Pie(
             labels=labels,
             values=values,
             hole=0.4,
             marker=dict(colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], line=dict(color='#000', width=2)),
-            textinfo='label+value',
+            text=text_labels,
+            textinfo='text',
             textfont=dict(color='white', size=14),
-            hoverinfo='label+value',
+            hoverinfo='label+value+percent',
             showlegend=True
         )
     ])
     fig.update_layout(
-        height=300,
+        height=250,
         paper_bgcolor='black',
         plot_bgcolor='black',
         font=dict(color='white', size=12),
         title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
         legend=dict(
-            font=dict(color='white', weight='bold'),
+            font=dict(color='white'),
             orientation='h',
             yanchor='bottom',
             y=-0.2,
@@ -235,6 +244,46 @@ def create_donut_chart(labels, values, title):
             x=0.5
         ),
         margin=dict(t=40, b=80, l=20, r=20)
+    )
+    return fig
+
+# Function to create bar chart
+def create_bar_chart(labels, values, title, total):
+    percentages = [(value / total * 100) if total > 0 else 0 for
+
+ value in values]
+    text_labels = [f"{value}<br>{percent:.1f}%" for value, percent in zip(values, percentages)]
+    
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            text=text_labels,
+            textposition='auto',
+            marker=dict(
+                color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+                line=dict(color='#000', width=2)
+            ),
+            hoverinfo='x+y+text'
+        )
+    ])
+    fig.update_layout(
+        height=250,
+        paper_bgcolor='black',
+        plot_bgcolor='black',
+        font=dict(color='white', size=12),
+        title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
+        xaxis=dict(
+            title='Status',
+            tickfont=dict(color='white'),
+            titlefont=dict(color='white')
+        ),
+        yaxis=dict(
+            title='Count',
+            tickfont=dict(color='white'),
+            titlefont=dict(color='white')
+        ),
+        margin=dict(t=40, b=80, l=40, r=40)
     )
     return fig
 
@@ -251,104 +300,103 @@ age_df = data['age']
 # Create 2-column layout
 col1, col2 = st.columns(2)
 
-# Column 1 - Top Chart (Total Patients)
+# Helper function to create table with percentages
+def create_table_data(df, label_column, total):
+    if not df.empty and not df[label_column].eq('No Data').all():
+        labels = df[label_column].fillna('Unknown').tolist()
+        counts = df['count'].tolist()
+        percentages = [(count / total * 100) if total > 0 else 0 for count in counts]
+        table_data = [
+            {"label": label if label else "Unknown", "count": count, "percentage": f"{percent:.1f}%"}
+            for label, count, percent in zip(labels, counts, percentages)
+        ]
+    else:
+        table_data = [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
+    return pd.DataFrame(table_data)
+
+# Column 1 - Total Patients
 with col1:
-    st.subheader("Total Patients")
-    series = [total_patients] if total_patients > 0 else [0]
-    labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
-    fig = create_donut_chart(labels, series, "Total Patients")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Table below the chart
-    table_data = [{"label": "Total Patients", "count": total_patients}] if total_patients > 0 else [{"label": "No Data", "count": 0}]
-    df_table = pd.DataFrame(table_data)
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Label"),
-            "count": st.column_config.NumberColumn("Count", format="%d")
-        },
-        hide_index=True
-    )
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Total Patients")
+        series = [total_patients] if total_patients > 0 else [0]
+        labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
+        fig = create_donut_chart(labels, series, "Total Patients", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        table_data = [{"label": "Total Patients", "count": total_patients, "percentage": "100.0%"}] if total_patients > 0 else [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
+        df_table = pd.DataFrame(table_data)
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Label"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# Column 1 - Bottom Chart (Patients by Gender)
+# Column 1 - Patients by Gender
 with col1:
-    st.subheader("Patients by Gender")
-    if not gender_df.empty and not gender_df['gender'].eq('No Data').all():
-        labels = gender_df['gender'].fillna('Unknown').tolist()
-        values = gender_df['count'].tolist()
-        table_data = [{"label": gender if gender else "Unknown", "count": count} for gender, count in zip(gender_df['gender'], gender_df['count'])]
-    else:
-        labels = ["No Data"]
-        values = [0]
-        table_data = [{"label": "No Data", "count": 0}]
-    
-    fig = create_donut_chart(labels, values, "Patients by Gender")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Table below the chart
-    df_table = pd.DataFrame(table_data)
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Label"),
-            "count": st.column_config.NumberColumn("Count", format="%d")
-        },
-        hide_index=True
-    )
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Gender")
+        df_table = create_table_data(gender_df, 'gender', total_patients)
+        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Gender"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# Column 2 - Top Chart (Patients by Status)
+# Column 2 - Patients by Status
 with col2:
-    st.subheader("Patients by Status")
-    if not status_df.empty and not status_df['patient_status'].eq('No Data').all():
-        labels = status_df['patient_status'].fillna('Unknown').tolist()
-        values = status_df['count'].tolist()
-        table_data = [{"label": status if status else "Unknown", "count": count} for status, count in zip(status_df['patient_status'], status_df['count'])]
-    else:
-        labels = ["No Data"]
-        values = [0]
-        table_data = [{"label": "No Data", "count": 0}]
-    
-    fig = create_donut_chart(labels, values, "Patients by Status")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Table below the chart
-    df_table = pd.DataFrame(table_data)
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Status"),
-            "count": st.column_config.NumberColumn("Count", format="%d")
-        },
-        hide_index=True
-    )
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Status")
+        df_table = create_table_data(status_df, 'patient_status', total_patients)
+        fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Status"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# Column 2 - Bottom Chart (Patients by Age Category)
+# Column 2 - Patients by Age Category
 with col2:
-    st.subheader("Patients by Age Category")
-    if not age_df.empty and not age_df['age_category'].eq('No Data').all():
-        labels = age_df['age_category'].fillna('Unknown').tolist()
-        values = age_df['count'].tolist()
-        table_data = [{"label": age_category if age_category else "Unknown", "count": count} for age_category, count in zip(age_df['age_category'], age_df['count'])]
-    else:
-        labels = ["No Data"]
-        values = [0]
-        table_data = [{"label": "No Data", "count": 0}]
-    
-    fig = create_donut_chart(labels, values, "Patients by Age Category")
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Table below the chart
-    df_table = pd.DataFrame(table_data)
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Age Category"),
-            "count": st.column_config.NumberColumn("Count", format="%d")
-        },
-        hide_index=True
-    )
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Age Category")
+        df_table = create_table_data(age_df, 'age_category', total_patients)
+        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Age Category"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
