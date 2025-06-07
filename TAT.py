@@ -21,7 +21,7 @@ st.markdown("""
             border-radius: 10px;
             padding: 15px;
             margin-bottom: 20px;
-            height: 600px;
+            height: 500px;
             display: flex;
             flex-direction: column;
         }
@@ -70,7 +70,6 @@ st.markdown("""
         /* Chart part */
         .chart-part {
             flex: 1;
-            min-height: 300px;
         }
         
         /* Table part */
@@ -253,7 +252,7 @@ def create_donut_chart(labels, values, title):
         )
     ])
     fig.update_layout(
-        height=350,
+        height=300,
         paper_bgcolor='black',
         plot_bgcolor='black',
         font=dict(color='white', size=12),
@@ -286,7 +285,7 @@ def create_bar_chart(labels, values, title):
         )
     ])
     fig.update_layout(
-        height=350,
+        height=300,
         paper_bgcolor='black',
         plot_bgcolor='black',
         font=dict(color='white', size=12),
@@ -323,28 +322,31 @@ with col1:
         st.subheader("Total Patients")
         
         # Chart part
-        st.markdown('<div class="chart-part">', unsafe_allow_html=True)
-        series = [total_patients] if total_patients > 0 else [0]
-        labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
-        fig = create_donut_chart(labels, series, "")
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="chart-part">', unsafe_allow_html=True)
+            series = [total_patients] if total_patients > 0 else [0]
+            labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
+            fig = create_donut_chart(labels, series, "")
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Table part
-        st.markdown('<div class="table-part">', unsafe_allow_html=True)
-        table_data = [{"Label": "Total Patients", "Count": total_patients, "Percentage": "100%"}] if total_patients > 0 else [{"Label": "No Data", "Count": 0, "Percentage": "0%"}]
-        df_table = pd.DataFrame(table_data)
-        st.dataframe(
-            df_table,
-            use_container_width=True,
-            column_config={
-                "Label": st.column_config.TextColumn("Label"),
-                "Count": st.column_config.NumberColumn("Count", format="%d"),
-                "Percentage": st.column_config.TextColumn("Percentage")
-            },
-            hide_index=True
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="table-part">', unsafe_allow_html=True)
+            table_data = [{"Label": "Total Patients", "Count": total_patients, "Percentage": "100%"}] if total_patients > 0 else [{"Label": "No Data", "Count": 0, "Percentage": "0%"}]
+            df_table = pd.DataFrame(table_data)
+            st.dataframe(
+                df_table,
+                use_container_width=True,
+                column_config={
+                    "Label": st.column_config.TextColumn("Label"),
+                    "Count": st.column_config.NumberColumn("Count", format="%d"),
+                    "Percentage": st.column_config.TextColumn("Percentage")
+                },
+                hide_index=True
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 1 - Bottom Container (Patients by Gender)
@@ -354,38 +356,41 @@ with col1:
         st.subheader("Patients by Gender")
         
         # Chart part
-        st.markdown('<div class="chart-part">', unsafe_allow_html=True)
-        if not gender_df.empty and not gender_df['gender'].eq('No Data').all():
-            labels = gender_df['gender'].fillna('Unknown').tolist()
-            values = gender_df['count'].tolist()
-        else:
-            labels = ["No Data"]
-            values = [0]
-        
-        fig = create_donut_chart(labels, values, "")
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="chart-part">', unsafe_allow_html=True)
+            if not gender_df.empty and not gender_df['gender'].eq('No Data').all():
+                labels = gender_df['gender'].fillna('Unknown').tolist()
+                values = gender_df['count'].tolist()
+            else:
+                labels = ["No Data"]
+                values = [0]
+            
+            fig = create_donut_chart(labels, values, "")
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Table part
-        st.markdown('<div class="table-part">', unsafe_allow_html=True)
-        if not gender_df.empty and not gender_df['gender'].eq('No Data').all():
-            table_df = gender_df.copy()
-            table_df.columns = ['Label', 'Count']
-            table_df = create_table(table_df, total_patients)
-        else:
-            table_df = pd.DataFrame({'Label': ['No Data'], 'Count': [0], 'percentage': ['0%']})
+        with st.container():
+            st.markdown('<div class="table-part">', unsafe_allow_html=True)
+            if not gender_df.empty and not gender_df['gender'].eq('No Data').all():
+                table_df = gender_df.copy()
+                table_df.columns = ['Label', 'Count']
+                table_df = create_table(table_df, total_patients)
+            else:
+                table_df = pd.DataFrame({'Label': ['No Data'], 'Count': [0], 'percentage': ['0%']})
+            
+            st.dataframe(
+                table_df,
+                use_container_width=True,
+                column_config={
+                    "Label": st.column_config.TextColumn("Gender"),
+                    "Count": st.column_config.NumberColumn("Count", format="%d"),
+                    "percentage": st.column_config.TextColumn("Percentage")
+                },
+                hide_index=True
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        st.dataframe(
-            table_df,
-            use_container_width=True,
-            column_config={
-                "Label": st.column_config.TextColumn("Gender"),
-                "Count": st.column_config.NumberColumn("Count", format="%d"),
-                "percentage": st.column_config.TextColumn("Percentage")
-            },
-            hide_index=True
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 2 - Top Container (Patients by Status)
@@ -395,38 +400,41 @@ with col2:
         st.subheader("Patients by Status")
         
         # Chart part
-        st.markdown('<div class="chart-part">', unsafe_allow_html=True)
-        if not status_df.empty and not status_df['patient_status'].eq('No Data').all():
-            labels = status_df['patient_status'].fillna('Unknown').tolist()
-            values = status_df['count'].tolist()
-        else:
-            labels = ["No Data"]
-            values = [0]
-        
-        fig = create_bar_chart(labels, values, "")
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="chart-part">', unsafe_allow_html=True)
+            if not status_df.empty and not status_df['patient_status'].eq('No Data').all():
+                labels = status_df['patient_status'].fillna('Unknown').tolist()
+                values = status_df['count'].tolist()
+            else:
+                labels = ["No Data"]
+                values = [0]
+            
+            fig = create_bar_chart(labels, values, "")
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Table part
-        st.markdown('<div class="table-part">', unsafe_allow_html=True)
-        if not status_df.empty and not status_df['patient_status'].eq('No Data').all():
-            table_df = status_df.copy()
-            table_df.columns = ['Label', 'Count']
-            table_df = create_table(table_df, total_patients)
-        else:
-            table_df = pd.DataFrame({'Label': ['No Data'], 'Count': [0], 'percentage': ['0%']})
+        with st.container():
+            st.markdown('<div class="table-part">', unsafe_allow_html=True)
+            if not status_df.empty and not status_df['patient_status'].eq('No Data').all():
+                table_df = status_df.copy()
+                table_df.columns = ['Label', 'Count']
+                table_df = create_table(table_df, total_patients)
+            else:
+                table_df = pd.DataFrame({'Label': ['No Data'], 'Count': [0], 'percentage': ['0%']})
+            
+            st.dataframe(
+                table_df,
+                use_container_width=True,
+                column_config={
+                    "Label": st.column_config.TextColumn("Status"),
+                    "Count": st.column_config.NumberColumn("Count", format="%d"),
+                    "percentage": st.column_config.TextColumn("Percentage")
+                },
+                hide_index=True
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        st.dataframe(
-            table_df,
-            use_container_width=True,
-            column_config={
-                "Label": st.column_config.TextColumn("Status"),
-                "Count": st.column_config.NumberColumn("Count", format="%d"),
-                "percentage": st.column_config.TextColumn("Percentage")
-            },
-            hide_index=True
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 2 - Bottom Container (Patients by Age Category)
@@ -436,36 +444,39 @@ with col2:
         st.subheader("Patients by Age Category")
         
         # Chart part
-        st.markdown('<div class="chart-part">', unsafe_allow_html=True)
-        if not age_df.empty and not age_df['age_category'].eq('No Data').all():
-            labels = age_df['age_category'].fillna('Unknown').tolist()
-            values = age_df['count'].tolist()
-        else:
-            labels = ["No Data"]
-            values = [0]
-        
-        fig = create_donut_chart(labels, values, "")
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with st.container():
+            st.markdown('<div class="chart-part">', unsafe_allow_html=True)
+            if not age_df.empty and not age_df['age_category'].eq('No Data').all():
+                labels = age_df['age_category'].fillna('Unknown').tolist()
+                values = age_df['count'].tolist()
+            else:
+                labels = ["No Data"]
+                values = [0]
+            
+            fig = create_donut_chart(labels, values, "")
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Table part
-        st.markdown('<div class="table-part">', unsafe_allow_html=True)
-        if not age_df.empty and not age_df['age_category'].eq('No Data').all():
-            table_df = age_df.copy()
-            table_df.columns = ['Label', 'Count']
-            table_df = create_table(table_df, total_patients)
-        else:
-            table_df = pd.DataFrame({'Label': ['No Data'], 'Count': [0], 'percentage': ['0%']})
+        with st.container():
+            st.markdown('<div class="table-part">', unsafe_allow_html=True)
+            if not age_df.empty and not age_df['age_category'].eq('No Data').all():
+                table_df = age_df.copy()
+                table_df.columns = ['Label', 'Count']
+                table_df = create_table(table_df, total_patients)
+            else:
+                table_df = pd.DataFrame({'Label': ['No Data'], 'Count': [0], 'percentage': ['0%']})
+            
+            st.dataframe(
+                table_df,
+                use_container_width=True,
+                column_config={
+                    "Label": st.column_config.TextColumn("Age Category"),
+                    "Count": st.column_config.NumberColumn("Count", format="%d"),
+                    "percentage": st.column_config.TextColumn("Percentage")
+                },
+                hide_index=True
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
         
-        st.dataframe(
-            table_df,
-            use_container_width=True,
-            column_config={
-                "Label": st.column_config.TextColumn("Age Category"),
-                "Count": st.column_config.NumberColumn("Count", format="%d"),
-                "percentage": st.column_config.TextColumn("Percentage")
-            },
-            hide_index=True
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
