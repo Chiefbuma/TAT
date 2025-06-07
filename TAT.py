@@ -281,7 +281,8 @@ def create_bar_chart(labels, values, title):
             y=values,
             text=text,
             textposition='auto',
-            marker=dict(color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444']),
+            marker=dict(color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'])
+        )
     ])
     fig.update_layout(
         height=300,
