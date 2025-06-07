@@ -5,3 +5,4 @@ numpy
 ipywidgets
 plotly
 mysql-connector-python
+streamlit_apexjs
