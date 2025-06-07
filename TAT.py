@@ -1,6 +1,6 @@
 import streamlit as st
+from streamlit_apexjs import st_apexcharts
 import pandas as pd
-import plotly.graph_objects as go
 import mysql.connector
 from mysql.connector import Error
 
@@ -45,13 +45,14 @@ st.markdown("""
         }
         
         /* Chart title color */
-        .gtitle {
-            color: white !important;
+        .apexcharts-title-text {
+            fill: white !important;
         }
         
         /* Legend text color */
-        .legendtext {
-            color: white !important;
+        .apexcharts-legend-text {
+            fill: white !important;
+            font-size: 14px !important; /* Larger legend text */
         }
         
         /* Remove extra padding around elements */
@@ -215,64 +216,111 @@ def fetch_patient_data():
         }
 
 # Function to create donut chart with labels outside
-def create_donut_chart(labels, values, title, total):
+def create_donut_chart(labels, values, title, total, chart_id):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
-    text_labels = [f"{label}<br>{value}<br>{percent:.1f}%" for label, value, percent in zip(labels, values, percentages)]
+    data_labels = [f"{label}<br>{value} ({percent:.1f}%)" for label, value, percent in zip(labels, values, percentages)]
     
-    fig = go.Figure(data=[
-        go.Pie(
-            labels=labels,
-            values=values,
-            hole=0.4,
-            marker=dict(colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], line=dict(color='#000', width=2)),
-            text=text_labels,
-            textinfo='label+text',  # Labels outside the chart
-            textposition='outside',  # Place labels outside
-            textfont=dict(color='white', size=16),  # Larger label text
-            hoverinfo='label+value+percent',
-            showlegend=False  # Hide legend since labels are outside
-        )
-    ])
-    fig.update_layout(
-        height=350,  # Larger chart size
-        paper_bgcolor='black',
-        plot_bgcolor='black',
-        font=dict(color='white', size=14),  # Larger base font
-        title=dict(text=title, font=dict(color='white', size=18), x=0.5, xanchor='center'),  # Larger title
-        margin=dict(t=50, b=50, l=20, r=20)  # Adjusted margins for outside labels
-    )
-    return fig
+    options = {
+        "chart": {
+            "id": chart_id,
+            "type": "donut",
+            "toolbar": {"show": False},
+            "background": "black"
+        },
+        "labels": labels,
+        "series": values,
+        "dataLabels": {
+            "enabled": True,
+            "style": {
+                "fontSize": "16px",  # Larger label text
+                "colors": ["#fff"]
+            },
+            "formatter": lambda val, opts: data_labels[opts.seriesIndex]
+        },
+        "legend": {
+            "show": False  # Hide legend since labels are outside
+        },
+        "colors": ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+        "plotOptions": {
+            "pie": {
+                "donut": {
+                    "size": "65%",  # Larger donut hole
+                    "labels": {
+                        "show": True,
+                        "total": {
+                            "show": True,
+                            "label": "Total",
+                            "fontSize": "16px",
+                            "color": "#fff"
+                        }
+                    }
+                }
+            }
+        },
+        "title": {
+            "text": title,
+            "align": "center",
+            "style": {
+                "fontSize": "18px",  # Larger title
+                "color": "#fff"
+            }
+        }
+    }
+    return options, values
 
 # Function to create bar chart with labels outside
-def create_bar_chart(labels, values, title, total):
+def create_bar_chart(labels, values, title, total, chart_id):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
-    text_labels = [f"{value}<br>{percent:.1f}%" for value, percent in zip(values, percentages)]
+    data_labels = [f"{value} ({percent:.1f}%)" for value, percent in zip(values, percentages)]
     
-    fig = go.Figure(data=[
-        go.Bar(
-           
-            x=labels,
-            y=values,
-            text=text_labels,
-            textposition='outside',  # Labels outside the bars
-            textfont=dict(color='white', size=16),  # Larger label text
-            marker=dict(
-                color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
-                line=dict(color='#000', width=2)
-            ),
-            hoverinfo='x+y+text'
-        )
-    ])
-    fig.update_layout(
-        height=350,  # Larger chart size
-        paper_bgcolor='black',
-        plot_bgcolor='black',
-        font=dict(color='white', size=14),  # Larger base font
-        title=dict(text=title, font=dict(color='white', size=18), x=0.5, xanchor='center'),  # Larger title
-       
-        margin=dict(t=50, b=80, l=40, r=40)  # Adjusted margins for outside labels
-    )
-    return fig
+    options = {
+        "chart": {
+            "id": chart_id,
+            "type": "bar",
+            "toolbar": {"show": False},
+            "background": "black"
+        },
+        "xaxis": {
+            "categories": labels,
+            "labels": {
+                "style": {
+                    "fontSize": "14px",  # Larger x-axis labels
+                    "colors": ["#fff"]
+                }
+            }
+        },
+        "yaxis": {
+            "labels": {
+                "style": {
+                    "fontSize": "14px",  # Larger y-axis labels
+                    "colors": ["#fff"]
+                }
+            }
+        },
+        "dataLabels": {
+            "enabled": True,
+            "style": {
+                "fontSize": "16px",  # Larger data labels
+                "colors": ["#fff"]
+            },
+            "position": "top",  # Labels above bars
+            "formatter": lambda val, opts: data_labels[opts.dataPointIndex]
+        },
+        "legend": {
+            "show": False  # Hide legend
+        },
+        "colors": ['#3b82f6'],
+        "title": {
+            "text": title,
+            "align": "center",
+            "style": {
+                "fontSize": "18px",  # Larger title
+                "color": "#fff"
+            }
+        }
+    }
+    series = [{"name": "Count", "data": values}]
+    return options, series
 
 # Helper function to create table with percentages
 def create_table_data(df, label_column, total):
@@ -289,7 +337,7 @@ def create_table_data(df, label_column, total):
     return pd.DataFrame(table_data)
 
 # Main app
-
+st.title("Patient Distribution Dashboard")
 
 # Fetch data
 data = fetch_patient_data()
@@ -304,10 +352,12 @@ col1, col2 = st.columns(2)
 # Column 1 - Total Patients
 with col1:
     with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Total Patients")
         series = [total_patients] if total_patients > 0 else [0]
         labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
-        fig = create_donut_chart(labels, series, "Total Patients", total_patients)
-        st.plotly_chart(fig, use_container_width=True)
+        options, series = create_donut_chart(labels, series, "Total Patients", total_patients, "total_chart")
+        st_apexcharts(options, series, 'donut', '100%')
         
         table_data = [{"label": "Total Patients", "count": total_patients, "percentage": "100.0%"}] if total_patients > 0 else [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
         df_table = pd.DataFrame(table_data)
@@ -326,9 +376,11 @@ with col1:
 # Column 1 - Patients by Gender
 with col1:
     with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Gender")
         df_table = create_table_data(gender_df, 'gender', total_patients)
-        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
-        st.plotly_chart(fig, use_container_width=True)
+        options, series = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients, "gender_chart")
+        st_apexcharts(options, series, 'donut', '100%')
         
         st.dataframe(
             df_table,
@@ -345,9 +397,11 @@ with col1:
 # Column 2 - Patients by Status
 with col2:
     with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Status")
         df_table = create_table_data(status_df, 'patient_status', total_patients)
-        fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
-        st.plotly_chart(fig, use_container_width=True)
+        options, series = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients, "status_chart")
+        st_apexcharts(options, series, 'bar', '100%')
         
         st.dataframe(
             df_table,
@@ -364,9 +418,11 @@ with col2:
 # Column 2 - Patients by Age Category
 with col2:
     with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Age Category")
         df_table = create_table_data(age_df, 'age_category', total_patients)
-        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
-        st.plotly_chart(fig, use_container_width=True)
+        options, series = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients, "age_chart")
+        st_apexcharts(options, series, 'donut', '100%')
         
         st.dataframe(
             df_table,
