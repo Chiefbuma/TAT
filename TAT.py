@@ -218,33 +218,35 @@ def fetch_patient_data():
 # Function to create donut chart with labels outside
 def create_donut_chart(labels, values, title, total, chart_id):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
-    data_labels = [f"{label}<br>{value} ({percent:.1f}%)" for label, value, percent in zip(labels, values, percentages)]
+    data_labels = [f"{label}\n{value} ({percent:.1f}%)" for label, value, percent in zip(labels, values, percentages)]
     
     options = {
         "chart": {
             "id": chart_id,
             "type": "donut",
             "toolbar": {"show": False},
-            "background": "black"
+            "background": "black",
+            "height": 350
         },
         "labels": labels,
         "series": values,
         "dataLabels": {
             "enabled": True,
             "style": {
-                "fontSize": "16px",  # Larger label text
+                "fontSize": "16px",
                 "colors": ["#fff"]
             },
-            "formatter": lambda val, opts: data_labels[opts.seriesIndex]
+            # Use JavaScript function as a string
+            "formatter": f"function(val, opts) {{ return {data_labels}[opts.seriesIndex]; }}"
         },
         "legend": {
-            "show": False  # Hide legend since labels are outside
+            "show": False
         },
         "colors": ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
         "plotOptions": {
             "pie": {
                 "donut": {
-                    "size": "65%",  # Larger donut hole
+                    "size": "65%",
                     "labels": {
                         "show": True,
                         "total": {
@@ -261,7 +263,7 @@ def create_donut_chart(labels, values, title, total, chart_id):
             "text": title,
             "align": "center",
             "style": {
-                "fontSize": "18px",  # Larger title
+                "fontSize": "18px",
                 "color": "#fff"
             }
         }
@@ -278,43 +280,59 @@ def create_bar_chart(labels, values, title, total, chart_id):
             "id": chart_id,
             "type": "bar",
             "toolbar": {"show": False},
-            "background": "black"
+            "background": "black",
+            "height": 350
         },
         "xaxis": {
             "categories": labels,
             "labels": {
                 "style": {
-                    "fontSize": "14px",  # Larger x-axis labels
+                    "fontSize": "14px",
                     "colors": ["#fff"]
+                }
+            },
+            "title": {
+                "text": "Status",
+                "style": {
+                    "fontSize": "14px",
+                    "color": "#fff"
                 }
             }
         },
         "yaxis": {
             "labels": {
                 "style": {
-                    "fontSize": "14px",  # Larger y-axis labels
+                    "fontSize": "14px",
                     "colors": ["#fff"]
+                }
+            },
+            "title": {
+                "text": "Count",
+                "style": {
+                    "fontSize": "14px",
+                    "color": "#fff"
                 }
             }
         },
         "dataLabels": {
             "enabled": True,
             "style": {
-                "fontSize": "16px",  # Larger data labels
+                "fontSize": "16px",
                 "colors": ["#fff"]
             },
-            "position": "top",  # Labels above bars
-            "formatter": lambda val, opts: data_labels[opts.dataPointIndex]
+            "position": "top",
+            # Use JavaScript function as a string
+            "formatter": f"function(val, opts) {{ return {data_labels}[opts.dataPointIndex]; }}"
         },
         "legend": {
-            "show": False  # Hide legend
+            "show": False
         },
         "colors": ['#3b82f6'],
         "title": {
             "text": title,
             "align": "center",
             "style": {
-                "fontSize": "18px",  # Larger title
+                "fontSize": "18px",
                 "color": "#fff"
             }
         }
