@@ -41,19 +41,23 @@ st.markdown("""
 
 # Function to check if a column exists in the table
 def column_exists(cursor, table_name, column_name):
-    cursor.execute(f"""
-        SELECT COUNT(*)
-        FROM information_schema.columns
-        WHERE table_name = '{table_name}' AND column_name = '{column_name}'
-    """)
-    return cursor.fetchone()[0] > 0
+    try:
+        cursor.execute(f"""
+            SELECT COUNT(*)
+            FROM information_schema.columns
+            WHERE table_name = '{table_name}' AND column_name = '{column_name}'
+        """)
+        return cursor.fetchone()[0] > 0
+    except Error as e:
+        st.error(f"Error checking column {column_name}: {e}")
+        return False
 
 # Function to fetch patient data from MySQL
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def fetch_patient_data():
     try:
         conn = mysql.connector.connect(
-            host="35.209.69.119",  # Replace with your MySQL host
+           host="35.209.69.119",  # Replace with your MySQL host
             user="u0iky3cyvfnfy",        # Replace with your MySQL user
             password="Thisisme@2026",# Replace with your MySQL password
             database="db4idjmbjsqwkf" # Replace with your database name
@@ -63,13 +67,17 @@ def fetch_patient_data():
 
         # Check for required columns
         table_name = 'patient'
-        required_columns = ['patient_id', 'deleted_at', 'gender', 'patient_status', 'dob']
+        required_columns = ['patient_id', 'deleted_at', 'gender', 'patient_status', 'age_category', 'dob']
         available_columns = {col: column_exists(cursor, table_name, col) for col in required_columns}
 
         # Query total patients
         total_query = "SELECT COUNT(DISTINCT patient_id) as total_patients FROM patient WHERE deleted_at IS NULL"
-        total_df = pd.read_sql(total_query, conn)
-        total_patients = int(total_df['total_patients'].iloc[0]) if not total_df.empty else 0
+        try:
+            total_df = pd.read_sql(total_query, conn)
+            total_patients = int(total_df['total_patients'].iloc[0]) if not total_df.empty else 0
+        except Error as e:
+            st.error(f"Total Patients query failed: {e}")
+            total_patients = 0
 
         # Query gender distribution
         if available_columns['gender']:
@@ -79,7 +87,11 @@ def fetch_patient_data():
                 WHERE deleted_at IS NULL
                 GROUP BY gender
             """
-            gender_df = pd.read_sql(gender_query, conn)
+            try:
+                gender_df = pd.read_sql(gender_query, conn)
+            except Error as e:
+                st.error(f"Gender query failed: {e}")
+                gender_df = pd.DataFrame({'gender': ['No Data'], 'count': [0]})
         else:
             gender_df = pd.DataFrame({'gender': ['No Data'], 'count': [0]})
             st.warning("Gender column not found in patient table.")
@@ -101,26 +113,68 @@ def fetch_patient_data():
             status_df = pd.DataFrame({'patient_status': ['No Data'], 'count': [0]})
             st.warning("Patient Status column not found in patient table.")
 
-        # Query age group distribution
-        if available_columns['dob']:
+        # Query age category distribution
+        if available_columns['age_category']:
             age_query = """
-                SELECT 
-                    CASE 
-                        WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) < 12 THEN '<12 yrs'
-                        WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN 13 AND 17 THEN '13-17 yrs'
-                        WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN 18 AND 35 THEN '18-35 yrs'
-                        WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) > 35 THEN '>35 yrs'
-                        ELSE 'Unknown'
-                    END as age_group,
-                    COUNT(DISTINCT patient_id) as count
+                SELECT age_category, COUNT(DISTINCT patient_id) as count
                 FROM patient
                 WHERE deleted_at IS NULL
-                GROUP BY age_group
+                GROUP BY age_category
             """
-            age_df = pd.read_sql(age_query, conn)
+            try:
+                age_df = pd.read_sql(age_query, conn)
+                if age_df.empty or age_df['age_category'].isnull().all():
+                    raise Error("Age category data is empty or all NULL")
+            except Error as e:
+                st.warning(f"Age Category query failed or empty: {e}. Falling back to DOB.")
+                if available_columns['dob']:
+                    age_query = """
+                        SELECT 
+                            CASE 
+                                WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) < 12 THEN '<12 yrs'
+                                WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN 13 AND 17 THEN '13-17 yrs'
+                                WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN 18 AND 35 THEN '18-35 yrs'
+                                WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) > 35 THEN '>35 yrs'
+                                ELSE 'Unknown'
+                            END as age_category,
+                            COUNT(DISTINCT patient_id) as count
+                        FROM patient
+                        WHERE deleted_at IS NULL
+                        GROUP BY age_category
+                    """
+                    try:
+                        age_df = pd.read_sql(age_query, conn)
+                    except Error as e:
+                        st.error(f"DOB-based Age Category query failed: {e}")
+                        age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
+                else:
+                    age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
+                    st.warning("DOB column not found in patient table.")
         else:
-            age_df = pd.DataFrame({'age_group': ['No Data'], 'count': [0]})
-            st.warning("DOB column not found in patient table.")
+            st.warning("Age Category column not found. Falling back to DOB.")
+            if available_columns['dob']:
+                age_query = """
+                    SELECT 
+                        CASE 
+                            WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) < 12 THEN '<12 yrs'
+                            WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN 13 AND 17 THEN '13-17 yrs'
+                            WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) BETWEEN 18 AND 35 THEN '18-35 yrs'
+                            WHEN TIMESTAMPDIFF(YEAR, dob, CURDATE()) > 35 THEN '>35 yrs'
+                            ELSE 'Unknown'
+                        END as age_category,
+                        COUNT(DISTINCT patient_id) as count
+                    FROM patient
+                    WHERE deleted_at IS NULL
+                    GROUP BY age_category
+                """
+                try:
+                    age_df = pd.read_sql(age_query, conn)
+                except Error as e:
+                    st.error(f"DOB-based Age Category query failed: {e}")
+                    age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
+            else:
+                age_df = pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
+                st.warning("DOB column not found in patient table.")
 
         conn.close()
         return {
@@ -135,7 +189,7 @@ def fetch_patient_data():
             'total': 0,
             'gender': pd.DataFrame({'gender': ['No Data'], 'count': [0]}),
             'status': pd.DataFrame({'patient_status': ['No Data'], 'count': [0]}),
-            'age': pd.DataFrame({'age_group': ['No Data'], 'count': [0]})
+            'age': pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
         }
 
 # Function to create donut chart
@@ -246,25 +300,25 @@ with st.container():
         df_table,
         use_container_width=True,
         column_config={
-            "label": st.column_config.TextColumn("Label"),
+            "label": st.column_config.TextColumn("Status"),
             "count": st.column_config.NumberColumn("Count", format="%d")
         },
         hide_index=True
     )
 
-# Age Group Distribution Chart and Table
+# Age Category Distribution Chart and Table
 with st.container():
-    st.subheader("Patients by Age Group")
-    if not age_df.empty and not age_df['age_group'].eq('No Data').all():
-        labels = age_df['age_group'].fillna('Unknown').tolist()
+    st.subheader("Patients by Age Category")
+    if not age_df.empty and not age_df['age_category'].eq('No Data').all():
+        labels = age_df['age_category'].fillna('Unknown').tolist()
         values = age_df['count'].tolist()
-        table_data = [{"label": age_group if age_group else "Unknown", "count": count} for age_group, count in zip(age_df['age_group'], age_df['count'])]
+        table_data = [{"label": age_category if age_category else "Unknown", "count": count} for age_category, count in zip(age_df['age_category'], age_df['count'])]
     else:
         labels = ["No Data"]
         values = [0]
         table_data = [{"label": "No Data", "count": 0}]
     
-    fig = create_donut_chart(labels, values, "Patients by Age Group")
+    fig = create_donut_chart(labels, values, "Patients by Age Category")
     st.plotly_chart(fig, use_container_width=True)
     
     df_table = pd.DataFrame(table_data)
@@ -272,7 +326,7 @@ with st.container():
         df_table,
         use_container_width=True,
         column_config={
-            "label": st.column_config.TextColumn("Label"),
+            "label": st.column_config.TextColumn("Age Category"),
             "count": st.column_config.NumberColumn("Count", format="%d")
         },
         hide_index=True
