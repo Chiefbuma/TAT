@@ -312,7 +312,7 @@ col1, col2 = st.columns(2)
 
 # Column 1 - Total Patients
 with col1:
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+    
     st.subheader("Total Patients")
     series = [total_patients] if total_patients > 0 else [0]
     labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
