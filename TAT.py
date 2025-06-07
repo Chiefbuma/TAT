@@ -1,6 +1,6 @@
 import streamlit as st
-from streamlit_apexjs import st_apexcharts
 import pandas as pd
+import plotly.graph_objects as go
 import mysql.connector
 from mysql.connector import Error
 
@@ -16,27 +16,21 @@ st.markdown("""
         }
         
         /* Container styling */
-        .dashboard-container {
-            background-color: black;
+        .custom-container {
+            background-color: black !important;
             border-radius: 10px;
-            padding: 20px;
+            padding: 15px;
+            height: 450px; /* Fixed height for all containers */
             margin-bottom: 20px;
-            height: 650px;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-        }
-        
-        /* Chart styling */
-        .apexcharts-canvas {
-            height: 400px !important;
         }
         
         /* Table styling */
-        .stDataFrame, .stDataFrame table {
+        table {
             background-color: black !important;
             color: white !important;
-            font-size: 14px !important;
+            border: 1px solid #444 !important;
             width: 100%;
         }
         
@@ -44,29 +38,22 @@ st.markdown("""
             background-color: black !important;
             color: white !important;
             border: 1px solid #444 !important;
-            font-size: 14px !important;
-            padding: 8px !important;
         }
         
-        /* Title styling */
-        .container-title {
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-align: center;
+        /* Chart title color */
+        .gtitle {
+            color: white !important;
         }
         
-        /* Legend styling */
-        .apexcharts-legend-text {
-            fill: white !important;
-            font-size: 14px !important;
+        /* Legend text color */
+        .legendtext {
+            color: white !important;
         }
         
-        /* Error message styling */
-        .error-message {
-            color: red;
-            font-weight: bold;
+        /* Remove extra padding around elements */
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -92,8 +79,7 @@ def fetch_patient_data():
             host="35.209.69.119",
             user="u0iky3cyvfnfy",
             password="Thisisme@2026",
-            database="db4idjmbjsqwkf",
-            connect_timeout=10
+            database="db4idjmbjsqwkf"
         )
         cursor = conn.cursor()
 
@@ -224,132 +210,92 @@ def fetch_patient_data():
             'age': pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
         }
 
-# Function to create donut chart with labels outside
-def create_donut_chart(labels, values, title, total, chart_id):
+# Function to create donut chart
+def create_donut_chart(labels, values, title, total):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
-    # Escape single quotes in labels to prevent JavaScript syntax errors
-    safe_labels = [label.replace("'", "\\'") for label in labels]
-    data_labels = [f"{label}\\n{value} ({percent:.1f}%)" for label, value, percent in zip(safe_labels, values, percentages)]
+    text_labels = [f"{label}<br>{value}<br>{percent:.1f}%" for label, value, percent in zip(labels, values, percentages)]
     
-    options = {
-        "chart": {
-            "id": chart_id,
-            "type": "donut",
-            "toolbar": {"show": False},
-            "background": "black",
-            "height": 400
-        },
-        "labels": labels,
-        "series": values,
-        "dataLabels": {
-            "enabled": True,
-            "style": {
-                "fontSize": "14px",
-                "colors": ["#fff"]
-            },
-            "formatter": f"function(val, opts) {{ return {data_labels}[opts.seriesIndex]; }}"
-        },
-        "legend": {
-            "show": False
-        },
-        "colors": ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
-        "plotOptions": {
-            "pie": {
-                "donut": {
-                    "size": "65%",
-                    "labels": {
-                        "show": True,
-                        "total": {
-                            "show": True,
-                            "label": "Total",
-                            "fontSize": "14px",
-                            "color": "#fff"
-                        }
-                    }
-                }
-            }
-        },
-        "title": {
-            "text": title,
-            "align": "center",
-            "style": {
-                "fontSize": "18px",
-                "color": "#fff"
-            }
-        }
-    }
-    return options, values
+    fig = go.Figure(data=[
+        go.Pie(
+            labels=labels,
+            values=values,
+            hole=0.4,
+            marker=dict(colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], line=dict(color='#000', width=2)),
+            text=text_labels,
+            textinfo='text',
+            textfont=dict(color='white', size=14),
+            hoverinfo='label+value+percent',
+            showlegend=True
+        )
+    ])
+    fig.update_layout(
+        height=250,
+        paper_bgcolor='black',
+        plot_bgcolor='black',
+        font=dict(color='white', size=12),
+        title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
+        legend=dict(
+            font=dict(color='white'),
+            orientation='h',
+            yanchor='bottom',
+            y=-0.2,
+            xanchor='center',
+            x=0.5
+        ),
+        margin=dict(t=40, b=80, l=20, r=20)
+    )
+    return fig
 
-# Function to create bar chart with labels outside
-def create_bar_chart(labels, values, title, total, chart_id):
+# Function to create bar chart
+def create_bar_chart(labels, values, title, total):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
-    # Escape single quotes in labels to prevent JavaScript syntax errors
-    safe_labels = [label.replace("'", "\\'") for label in labels]
-    data_labels = [f"{value} ({percent:.1f}%)" for value, percent in zip(values, percentages)]
+    text_labels = [f"{value}<br>{percent:.1f}%" for value, percent in zip(values, percentages)]
     
-    options = {
-        "chart": {
-            "id": chart_id,
-            "type": "bar",
-            "toolbar": {"show": False},
-            "background": "black",
-            "height": 400
-        },
-        "xaxis": {
-            "categories": safe_labels,
-            "labels": {
-                "style": {
-                    "fontSize": "14px",
-                    "colors": ["#fff"]
-                }
-            },
-            "title": {
-                "text": "Status",
-                "style": {
-                    "fontSize": "14px",
-                    "color": "#fff"
-                }
-            }
-        },
-        "yaxis": {
-            "labels": {
-                "style": {
-                    "fontSize": "14px",
-                    "colors": ["#fff"]
-                }
-            },
-            "title": {
-                "text": "Count",
-                "style": {
-                    "fontSize": "14px",
-                    "color": "#fff"
-                }
-            }
-        },
-        "dataLabels": {
-            "enabled": True,
-            "style": {
-                "fontSize": "14px",
-                "colors": ["#fff"]
-            },
-            "position": "top",
-            "formatter": f"function(val, opts) {{ return {data_labels}[opts.dataPointIndex]; }}"
-        },
-        "legend": {
-            "show": False
-        },
-        "colors": ['#3b82f6'],
-        "title": {
-            "text": title,
-            "align": "center",
-            "style": {
-                "fontSize": "18px",
-                "color": "#fff"
-            }
-        }
-    }
-    series = [{"name": "Count", "data": values}]
-    return options, series
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            text=text_labels,
+            textposition='auto',
+            marker=dict(
+                color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
+                line=dict(color='#000', width=2)
+            ),
+            hoverinfo='x+y+text'
+        )
+    ])
+    fig.update_layout(
+        height=250,
+        paper_bgcolor='black',
+        plot_bgcolor='black',
+        font=dict(color='white', size=12),
+        title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
+        xaxis=dict(
+            title='Status',
+            tickfont=dict(color='white'),
+            titlefont=dict(color='white')
+        ),
+        yaxis=dict(
+            title='Count',
+            tickfont=dict(color='white'),
+            titlefont=dict(color='white')
+        ),
+        margin=dict(t=40, b=80, l=40, r=40)
+    )
+    return fig
+
+# Main app
+st.title("Patient Distribution Dashboard")
+
+# Fetch data
+data = fetch_patient_data()
+total_patients = data['total']
+gender_df = data['gender']
+status_df = data['status']
+age_df = data['age']
+
+# Create 2-column layout
+col1, col2 = st.columns(2)
 
 # Helper function to create table with percentages
 def create_table_data(df, label_column, total):
@@ -358,74 +304,96 @@ def create_table_data(df, label_column, total):
         counts = df['count'].tolist()
         percentages = [(count / total * 100) if total > 0 else 0 for count in counts]
         table_data = [
-            {"Label": label if label else "Unknown", "Count": count, "Percentage": f"{percent:.1f}%"}
+            {"label": label if label else "Unknown", "count": count, "percentage": f"{percent:.1f}%"}
             for label, count, percent in zip(labels, counts, percentages)
         ]
     else:
-        table_data = [{"Label": "No Data", "Count": 0, "Percentage": "0.0%"}]
+        table_data = [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
     return pd.DataFrame(table_data)
 
-# Main app
-st.title("Patient Distribution Dashboard")
+# Column 1 - Total Patients
+with col1:
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Total Patients")
+        series = [total_patients] if total_patients > 0 else [0]
+        labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
+        fig = create_donut_chart(labels, series, "Total Patients", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        table_data = [{"label": "Total Patients", "count": total_patients, "percentage": "100.0%"}] if total_patients > 0 else [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
+        df_table = pd.DataFrame(table_data)
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Label"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# Fetch data
-try:
-    data = fetch_patient_data()
-    total_patients = data['total']
-    gender_df = data['gender']
-    status_df = data['status']
-    age_df = data['age']
+# Column 1 - Patients by Gender
+with col1:
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Gender")
+        df_table = create_table_data(gender_df, 'gender', total_patients)
+        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Gender"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Create 2-column layout
-    col1, col2 = st.columns(2)
+# Column 2 - Patients by Status
+with col2:
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Status")
+        df_table = create_table_data(status_df, 'patient_status', total_patients)
+        fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Status"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Column 1 - Total Patients
-    with col1:
-        with st.container():
-            st.markdown('<div class="dashboard-container">', unsafe_allow_html=True)
-            st.markdown('<div class="container-title">Total Patients</div>', unsafe_allow_html=True)
-            series = [total_patients] if total_patients > 0 else [0]
-            labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
-            options, series = create_donut_chart(labels, series, "", total_patients, "total_chart")
-            st_apexcharts(options, series, 'donut', '100%')
-            table_data = [{"Label": "Total Patients", "Count": total_patients, "Percentage": "100.0%"}] if total_patients > 0 else [{"Label": "No Data", "Count": 0, "Percentage": "0.0%"}]
-            df_table = pd.DataFrame(table_data)
-            st.dataframe(df_table, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Column 1 - Patients by Gender
-    with col1:
-        with st.container():
-            st.markdown('<div class="dashboard-container">', unsafe_allow_html=True)
-            st.markdown('<div class="container-title">Patients by Gender</div>', unsafe_allow_html=True)
-            df_table = create_table_data(gender_df, 'gender', total_patients)
-            options, series = create_donut_chart(df_table['Label'].tolist(), df_table['Count'].tolist(), "", total_patients, "gender_chart")
-            st_apexcharts(options, series, 'donut', '100%')
-            st.dataframe(df_table, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Column 2 - Patients by Status
-    with col2:
-        with st.container():
-            st.markdown('<div class="dashboard-container">', unsafe_allow_html=True)
-            st.markdown('<div class="container-title">Patients by Status</div>', unsafe_allow_html=True)
-            df_table = create_table_data(status_df, 'patient_status', total_patients)
-            options, series = create_bar_chart(df_table['Label'].tolist(), df_table['Count'].tolist(), "", total_patients, "status_chart")
-            st_apexcharts(options, series, 'bar', '100%')
-            st.dataframe(df_table, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Column 2 - Patients by Age Category
-    with col2:
-        with st.container():
-            st.markdown('<div class="dashboard-container">', unsafe_allow_html=True)
-            st.markdown('<div class="container-title">Patients by Age Category</div>', unsafe_allow_html=True)
-            df_table = create_table_data(age_df, 'age_category', total_patients)
-            options, series = create_donut_chart(df_table['Label'].tolist(), df_table['Count'].tolist(), "", total_patients, "age_chart")
-            st_apexcharts(options, series, 'donut', '100%')
-            st.dataframe(df_table, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-except Exception as e:
-    st.error(f"An error occurred while loading the dashboard: {str(e)}")
-    st.markdown('<div class="error-message">Please check the database connection and try again.</div>', unsafe_allow_html=True)
+# Column 2 - Patients by Age Category
+with col2:
+    with st.container():
+        st.markdown('<div class="custom-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Age Category")
+        df_table = create_table_data(age_df, 'age_category', total_patients)
+        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Age Category"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
