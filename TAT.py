@@ -251,7 +251,8 @@ def create_bar_chart(labels, values, title, total):
     fig = go.Figure(data=[
         go.Bar(
            
-           
+            x=labels,
+            y=values,
             text=text_labels,
             textposition='outside',  # Labels outside the bars
             textfont=dict(color='white', size=16),  # Larger label text
@@ -268,14 +269,7 @@ def create_bar_chart(labels, values, title, total):
         plot_bgcolor='black',
         font=dict(color='white', size=14),  # Larger base font
         title=dict(text=title, font=dict(color='white', size=18), x=0.5, xanchor='center'),  # Larger title
-        xaxis=dict(
-            title=dict(text='Status', font=dict(color='white', size=14)),  # Larger axis title
-            tickfont=dict(color='white', size=14)  # Larger tick labels
-        ),
-        yaxis=dict(
-            title=dict(text='Count', font=dict(color='white', size=14)),  # Larger axis title
-            tickfont=dict(color='white', size=14)  # Larger tick labels
-        ),
+       
         margin=dict(t=50, b=80, l=40, r=40)  # Adjusted margins for outside labels
     )
     return fig
