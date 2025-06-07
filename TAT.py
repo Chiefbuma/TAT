@@ -56,17 +56,6 @@ st.markdown("""
             padding-top: 1rem;
             padding-bottom: 1rem;
         }
-        
-        /* Chart part */
-        .chart-part {
-            flex: 2; /* Allocate more space to chart */
-        }
-        
-        /* Table part */
-        .table-part {
-            flex: 1; /* Allocate less space to table */
-            overflow: auto;
-        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -241,7 +230,7 @@ def create_donut_chart(labels, values, title, total):
         )
     ])
     fig.update_layout(
-        height=350,  # Increased chart size
+        height=350,  # Larger chart size
         paper_bgcolor='black',
         plot_bgcolor='black',
         font=dict(color='white', size=12),
@@ -277,20 +266,18 @@ def create_bar_chart(labels, values, title, total):
         )
     ])
     fig.update_layout(
-        height=350,  # Increased chart size
+        height=350,  # Larger chart size
         paper_bgcolor='black',
         plot_bgcolor='black',
         font=dict(color='white', size=12),
         title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
         xaxis=dict(
-            title='Status',
-            tickfont=dict(color='white'),
-            titlefont=dict(color='white')
+            title=dict(text='Status', font=dict(color='white', size=12)),
+            tickfont=dict(color='white')
         ),
         yaxis=dict(
-            title='Count',
-            tickfont=dict(color='white'),
-            titlefont=dict(color='white')
+            title=dict(text='Count', font=dict(color='white', size=12)),
+            tickfont=dict(color='white')
         ),
         margin=dict(t=40, b=80, l=40, r=40)
     )
@@ -326,8 +313,7 @@ col1, col2 = st.columns(2)
 # Column 1 - Total Patients
 with col1:
     with st.container():
-        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-        st.subheader("Total Patients")
+       
         series = [total_patients] if total_patients > 0 else [0]
         labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
         fig = create_donut_chart(labels, series, "Total Patients", total_patients)
@@ -350,7 +336,7 @@ with col1:
 # Column 1 - Patients by Gender
 with col1:
     with st.container():
-       
+      
         df_table = create_table_data(gender_df, 'gender', total_patients)
         fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
         st.plotly_chart(fig, use_container_width=True)
@@ -370,7 +356,7 @@ with col1:
 # Column 2 - Patients by Status
 with col2:
     with st.container():
-       
+      
         df_table = create_table_data(status_df, 'patient_status', total_patients)
         fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
         st.plotly_chart(fig, use_container_width=True)
@@ -390,7 +376,7 @@ with col2:
 # Column 2 - Patients by Age Category
 with col2:
     with st.container():
-     
+        
         df_table = create_table_data(age_df, 'age_category', total_patients)
         fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
         st.plotly_chart(fig, use_container_width=True)
