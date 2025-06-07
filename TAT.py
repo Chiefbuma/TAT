@@ -4,37 +4,51 @@ import plotly.graph_objects as go
 import mysql.connector
 from mysql.connector import Error
 
-# Set page config for wide layout and dark theme
+# Set page config for wide layout
 st.set_page_config(page_title="Patient Distribution Dashboard", layout="wide")
 
-# Apply dark theme CSS to match Filament styling
+# Custom CSS for the desired color scheme (white background, black chart containers)
 st.markdown("""
     <style>
+        /* Main white background */
         body, .stApp {
-            background-color: #18181b;
-            color: #fff;
+            background-color: white !important;
         }
-        .stDataFrame, table, th, td {
-            background-color: #27272a;
-            color: #fff;
-            border: 1px solid #27272a;
-            border-collapse: collapse;
+        
+        /* Black containers for charts/tables */
+        .stPlotlyChart, .stDataFrame, .stDataFrame table {
+            background-color: black !important;
+            border-radius: 10px;
+            padding: 15px;
         }
+        
+        /* Table styling */
+        table {
+            background-color: black !important;
+            color: white !important;
+            border: 1px solid #444 !important;
+        }
+        
         th, td {
-            padding: 0.5rem;
-            text-align: left;
+            background-color: black !important;
+            color: white !important;
+            border: 1px solid #444 !important;
         }
-        th {
-            background-color: #27272a;
+        
+        /* Chart title color */
+        .gtitle {
+            color: white !important;
         }
-        .stDataFrame th:last-child, .stDataFrame td:last-child {
-            text-align: right;
+        
+        /* Legend text color */
+        .legendtext {
+            color: white !important;
         }
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            border: 1px solid #27272a;
-            border-radius: 1rem;
-            padding: 1.5rem;
-            background-color: #18181b;
+        
+        /* Remove extra padding around elements */
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -192,28 +206,28 @@ def fetch_patient_data():
             'age': pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
         }
 
-# Function to create donut chart
+# Function to create donut chart with black background
 def create_donut_chart(labels, values, title):
     fig = go.Figure(data=[
         go.Pie(
             labels=labels,
             values=values,
             hole=0.4,
-            marker=dict(colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], line=dict(color='#27272a', width=2)),
+            marker=dict(colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], line=dict(color='#000', width=2)),
             textinfo='label+value',
-            textfont=dict(color='#9ca3af', size=14),
+            textfont=dict(color='white', size=14),
             hoverinfo='label+value',
             showlegend=True
         )
     ])
     fig.update_layout(
         height=300,
-        paper_bgcolor='#18181b',
-        plot_bgcolor='#18181b',
-        font=dict(color='#9ca3af', size=12),
-        title=dict(text=title, font=dict(color='#fff', size=16), x=0.5, xanchor='center'),
+        paper_bgcolor='black',
+        plot_bgcolor='black',
+        font=dict(color='white', size=12),
+        title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
         legend=dict(
-            font=dict(color='#9ca3af', weight='bold'),
+            font=dict(color='white', weight='bold'),
             orientation='h',
             yanchor='bottom',
             y=-0.2,
@@ -234,14 +248,18 @@ gender_df = data['gender']
 status_df = data['status']
 age_df = data['age']
 
-# Total Patients Chart and Table
-with st.container():
+# Create 2-column layout
+col1, col2 = st.columns(2)
+
+# Column 1 - Top Chart (Total Patients)
+with col1:
     st.subheader("Total Patients")
     series = [total_patients] if total_patients > 0 else [0]
     labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
     fig = create_donut_chart(labels, series, "Total Patients")
     st.plotly_chart(fig, use_container_width=True)
     
+    # Table below the chart
     table_data = [{"label": "Total Patients", "count": total_patients}] if total_patients > 0 else [{"label": "No Data", "count": 0}]
     df_table = pd.DataFrame(table_data)
     st.dataframe(
@@ -254,8 +272,8 @@ with st.container():
         hide_index=True
     )
 
-# Gender Distribution Chart and Table
-with st.container():
+# Column 1 - Bottom Chart (Patients by Gender)
+with col1:
     st.subheader("Patients by Gender")
     if not gender_df.empty and not gender_df['gender'].eq('No Data').all():
         labels = gender_df['gender'].fillna('Unknown').tolist()
@@ -269,6 +287,7 @@ with st.container():
     fig = create_donut_chart(labels, values, "Patients by Gender")
     st.plotly_chart(fig, use_container_width=True)
     
+    # Table below the chart
     df_table = pd.DataFrame(table_data)
     st.dataframe(
         df_table,
@@ -280,8 +299,8 @@ with st.container():
         hide_index=True
     )
 
-# Patient Status Distribution Chart and Table
-with st.container():
+# Column 2 - Top Chart (Patients by Status)
+with col2:
     st.subheader("Patients by Status")
     if not status_df.empty and not status_df['patient_status'].eq('No Data').all():
         labels = status_df['patient_status'].fillna('Unknown').tolist()
@@ -295,6 +314,7 @@ with st.container():
     fig = create_donut_chart(labels, values, "Patients by Status")
     st.plotly_chart(fig, use_container_width=True)
     
+    # Table below the chart
     df_table = pd.DataFrame(table_data)
     st.dataframe(
         df_table,
@@ -306,8 +326,8 @@ with st.container():
         hide_index=True
     )
 
-# Age Category Distribution Chart and Table
-with st.container():
+# Column 2 - Bottom Chart (Patients by Age Category)
+with col2:
     st.subheader("Patients by Age Category")
     if not age_df.empty and not age_df['age_category'].eq('No Data').all():
         labels = age_df['age_category'].fillna('Unknown').tolist()
@@ -321,6 +341,7 @@ with st.container():
     fig = create_donut_chart(labels, values, "Patients by Age Category")
     st.plotly_chart(fig, use_container_width=True)
     
+    # Table below the chart
     df_table = pd.DataFrame(table_data)
     st.dataframe(
         df_table,
