@@ -3,4 +3,5 @@ pandas
 matplotlib
 numpy
 ipywidgets
-
+plotly
+mysql-connector-python
