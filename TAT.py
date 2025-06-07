@@ -250,8 +250,8 @@ def create_bar_chart(labels, values, title, total):
     
     fig = go.Figure(data=[
         go.Bar(
-            x=labels,
-            y=values,
+           
+           
             text=text_labels,
             textposition='outside',  # Labels outside the bars
             textfont=dict(color='white', size=16),  # Larger label text
