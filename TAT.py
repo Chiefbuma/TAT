@@ -53,10 +53,11 @@ def column_exists(cursor, table_name, column_name):
 def fetch_patient_data():
     try:
         conn = mysql.connector.connect(
-            host="your_mysql_host",  # Replace with your MySQL host
-            user="your_user",        # Replace with your MySQL user
-            password="your_password",# Replace with your MySQL password
-            database="your_database" # Replace with your database name
+            host="35.209.69.119",  # Replace with your MySQL host
+            user="u0iky3cyvfnfy",        # Replace with your MySQL user
+            password="Thisisme@2026",# Replace with your MySQL password
+            database="db4idjmbjsqwkf" # Replace with your database name
+
         )
         cursor = conn.cursor()
 
