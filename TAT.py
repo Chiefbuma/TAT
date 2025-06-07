@@ -365,7 +365,7 @@ with col1:
             },
             hide_index=True
         )
-        st.markdown(unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 2 - Patients by Status
 with col2:
