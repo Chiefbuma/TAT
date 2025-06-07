@@ -27,18 +27,21 @@ st.markdown("""
             justify-content: space-between;
         }
         
-        /* Table styling */
+        /* Table styling with larger text */
         table {
             background-color: black !important;
             color: white !important;
             border: 1px solid #444 !important;
             width: 100%;
+            font-size: 16px !important; /* Larger table text */
         }
         
         th, td {
             background-color: black !important;
             color: white !important;
             border: 1px solid #444 !important;
+            padding: 8px !important;
+            font-size: 16px !important; /* Larger table header and cell text */
         }
         
         /* Chart title color */
@@ -211,7 +214,7 @@ def fetch_patient_data():
             'age': pd.DataFrame({'age_category': ['No Data'], 'count': [0]})
         }
 
-# Function to create donut chart with larger size
+# Function to create donut chart with labels outside
 def create_donut_chart(labels, values, title, total):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
     text_labels = [f"{label}<br>{value}<br>{percent:.1f}%" for label, value, percent in zip(labels, values, percentages)]
@@ -223,31 +226,24 @@ def create_donut_chart(labels, values, title, total):
             hole=0.4,
             marker=dict(colors=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'], line=dict(color='#000', width=2)),
             text=text_labels,
-            textinfo='text',
-            textfont=dict(color='white', size=14),
+            textinfo='label+text',  # Labels outside the chart
+            textposition='outside',  # Place labels outside
+            textfont=dict(color='white', size=16),  # Larger label text
             hoverinfo='label+value+percent',
-            showlegend=True
+            showlegend=False  # Hide legend since labels are outside
         )
     ])
     fig.update_layout(
         height=350,  # Larger chart size
         paper_bgcolor='black',
         plot_bgcolor='black',
-        font=dict(color='white', size=12),
-        title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
-        legend=dict(
-            font=dict(color='white'),
-            orientation='h',
-            yanchor='bottom',
-            y=-0.2,
-            xanchor='center',
-            x=0.5
-        ),
-        margin=dict(t=40, b=80, l=20, r=20)
+        font=dict(color='white', size=14),  # Larger base font
+        title=dict(text=title, font=dict(color='white', size=18), x=0.5, xanchor='center'),  # Larger title
+        margin=dict(t=50, b=50, l=20, r=20)  # Adjusted margins for outside labels
     )
     return fig
 
-# Function to create bar chart with larger size
+# Function to create bar chart with labels outside
 def create_bar_chart(labels, values, title, total):
     percentages = [(value / total * 100) if total > 0 else 0 for value in values]
     text_labels = [f"{value}<br>{percent:.1f}%" for value, percent in zip(values, percentages)]
@@ -257,7 +253,8 @@ def create_bar_chart(labels, values, title, total):
             x=labels,
             y=values,
             text=text_labels,
-            textposition='auto',
+            textposition='outside',  # Labels outside the bars
+            textfont=dict(color='white', size=16),  # Larger label text
             marker=dict(
                 color=['#3b82f6', '#10b981', '#f59e0b', '#ef4444'],
                 line=dict(color='#000', width=2)
@@ -269,17 +266,17 @@ def create_bar_chart(labels, values, title, total):
         height=350,  # Larger chart size
         paper_bgcolor='black',
         plot_bgcolor='black',
-        font=dict(color='white', size=12),
-        title=dict(text=title, font=dict(color='white', size=16), x=0.5, xanchor='center'),
+        font=dict(color='white', size=14),  # Larger base font
+        title=dict(text=title, font=dict(color='white', size=18), x=0.5, xanchor='center'),  # Larger title
         xaxis=dict(
-            title=dict(text='Status', font=dict(color='white', size=12)),
-            tickfont=dict(color='white')
+            title=dict(text='Status', font=dict(color='white', size=14)),  # Larger axis title
+            tickfont=dict(color='white', size=14)  # Larger tick labels
         ),
         yaxis=dict(
-            title=dict(text='Count', font=dict(color='white', size=12)),
-            tickfont=dict(color='white')
+            title=dict(text='Count', font=dict(color='white', size=14)),  # Larger axis title
+            tickfont=dict(color='white', size=14)  # Larger tick labels
         ),
-        margin=dict(t=40, b=80, l=40, r=40)
+        margin=dict(t=50, b=80, l=40, r=40)  # Adjusted margins for outside labels
     )
     return fig
 
@@ -298,7 +295,7 @@ def create_table_data(df, label_column, total):
     return pd.DataFrame(table_data)
 
 # Main app
-
+st.title("Patient Distribution Dashboard")
 
 # Fetch data
 data = fetch_patient_data()
@@ -312,82 +309,87 @@ col1, col2 = st.columns(2)
 
 # Column 1 - Total Patients
 with col1:
-    
-
-    series = [total_patients] if total_patients > 0 else [0]
-    labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
-    fig = create_donut_chart(labels, series, "Total Patients", total_patients)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    table_data = [{"label": "Total Patients", "count": total_patients, "percentage": "100.0%"}] if total_patients > 0 else [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
-    df_table = pd.DataFrame(table_data)
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Label"),
-            "count": st.column_config.NumberColumn("Count", format="%d"),
-            "percentage": st.column_config.TextColumn("Percentage")
-        },
-        hide_index=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Total Patients")
+        series = [total_patients] if total_patients > 0 else [0]
+        labels = ["Total Patients"] if total_patients > 0 else ["No Data"]
+        fig = create_donut_chart(labels, series, "Total Patients", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        table_data = [{"label": "Total Patients", "count": total_patients, "percentage": "100.0%"}] if total_patients > 0 else [{"label": "No Data", "count": 0, "percentage": "0.0%"}]
+        df_table = pd.DataFrame(table_data)
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Label"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 1 - Patients by Gender
 with col1:
-   
-
-    df_table = create_table_data(gender_df, 'gender', total_patients)
-    fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Gender"),
-            "count": st.column_config.NumberColumn("Count", format="%d"),
-            "percentage": st.column_config.TextColumn("Percentage")
-        },
-        hide_index=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Gender")
+        df_table = create_table_data(gender_df, 'gender', total_patients)
+        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Gender", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Gender"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 2 - Patients by Status
 with col2:
-  
-
-    df_table = create_table_data(status_df, 'patient_status', total_patients)
-    fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Status"),
-            "count": st.column_config.NumberColumn("Count", format="%d"),
-            "percentage": st.column_config.TextColumn("Percentage")
-        },
-        hide_index=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Status")
+        df_table = create_table_data(status_df, 'patient_status', total_patients)
+        fig = create_bar_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Status", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Status"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Column 2 - Patients by Age Category
 with col2:
-
-    df_table = create_table_data(age_df, 'age_category', total_patients)
-    fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    st.dataframe(
-        df_table,
-        use_container_width=True,
-        column_config={
-            "label": st.column_config.TextColumn("Age Category"),
-            "count": st.column_config.NumberColumn("Count", format="%d"),
-            "percentage": st.column_config.TextColumn("Percentage")
-        },
-        hide_index=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container():
+        st.markdown('<div class="chart-container">', unsafe_allow_html=True)
+        st.subheader("Patients by Age Category")
+        df_table = create_table_data(age_df, 'age_category', total_patients)
+        fig = create_donut_chart(df_table['label'].tolist(), df_table['count'].tolist(), "Patients by Age Category", total_patients)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.dataframe(
+            df_table,
+            use_container_width=True,
+            column_config={
+                "label": st.column_config.TextColumn("Age Category"),
+                "count": st.column_config.NumberColumn("Count", format="%d"),
+                "percentage": st.column_config.TextColumn("Percentage")
+            },
+            hide_index=True
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
